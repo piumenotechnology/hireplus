@@ -3,4 +3,3 @@ deployment:
   tasks:
     - export DEPLOYPATH=/home/piumenos/hireplus.piumenosystem.com/
     - /bin/cp index.html $DEPLOYPATH
-    - /bin/cp style.css $DEPLOYPATH
