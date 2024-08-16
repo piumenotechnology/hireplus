@@ -129,5 +129,3 @@ Route::post('baseinterestdetail', 'App\Http\Controllers\Api\BaseInterestDetailCo
 Route::group(['middleware' => 'auth:api'], function(){
     Route::post('/logout', 'App\Http\Controllers\Api\AuthController@logout');
 });
-
-
