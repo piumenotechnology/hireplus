@@ -215,7 +215,7 @@ class PurchaseOrderController extends Controller
                     ->leftJoin('vehicle_solds','sales_orders.id','=','vehicle_solds.id_sales_order')
                     //->selectRaw('SUM(total_income_new) as total, purchase_orders.*, sales_orders.*, rehiring_orders.*, vehicle_solds.*')
                     ->whereRaw('purchase_orders.id = '.$id)
-                    ->groupBy('agreement_number')
+                    // ->groupBy('agreement_number')
                     //->sum('total_income_new')
                     ->get();
         
@@ -307,7 +307,7 @@ class PurchaseOrderController extends Controller
     public function listTotalIncome($id){
             $purchaseorder = DB::table('sales_orders')
                         ->join('purchase_orders','purchase_orders.id','=','sales_orders.id_purchase_order')
-                        ->selectRaw('round(SUM(total_income),2) as sum_total_income, purchase_orders.vehicle_registration')
+                        ->selectRaw('round(SUM(total_income),2) as sum_total_income')
                         ->whereRaw('purchase_orders.id = '.$id)
                         ->first();
     
@@ -1087,33 +1087,33 @@ public function bookedStock(Request $request){
     // }
     
     
-        public function showDashboard($date1, $date2)
-{
-    $purchaseorder = DB::table('sales_orders')
-        ->leftJoin('purchase_orders', 'purchase_orders.id', '=', 'sales_orders.id_purchase_order')
-        ->leftJoin('vehicle_solds', 'sales_orders.id', '=', 'vehicle_solds.id_sales_order')
-        ->leftJoin('other_incomes', 'purchase_orders.id', '=', 'other_incomes.id_purchase_order')
-        ->leftJoin('other_costs', 'purchase_orders.id', '=', 'other_costs.id_purchase_order')
-        ->select(
-            '*',
-            DB::raw("DATE_ADD(sales_orders.contract_start_date, INTERVAL sales_orders.term_months MONTH) AS date_after_duration")
-        )
-        ->whereRaw("DATE_ADD(sales_orders.contract_start_date, INTERVAL sales_orders.term_months MONTH) BETWEEN ? AND ?", [$date1, $date2])
-        ->groupBy('agreement_number')
-        ->get();
-
-    if (count($purchaseorder) > 0) {
+    public function showDashboard($date1, $date2)
+    {
+        $purchaseorder = DB::table('sales_orders')
+            ->leftJoin('purchase_orders', 'purchase_orders.id', '=', 'sales_orders.id_purchase_order')
+            ->leftJoin('vehicle_solds', 'sales_orders.id', '=', 'vehicle_solds.id_sales_order')
+            ->leftJoin('other_incomes', 'purchase_orders.id', '=', 'other_incomes.id_purchase_order')
+            ->leftJoin('other_costs', 'purchase_orders.id', '=', 'other_costs.id_purchase_order')
+            ->select(
+                '*',
+                DB::raw("DATE_ADD(sales_orders.contract_start_date, INTERVAL sales_orders.term_months MONTH) AS date_after_duration")
+            )
+            ->whereRaw("DATE_ADD(sales_orders.contract_start_date, INTERVAL sales_orders.term_months MONTH) BETWEEN ? AND ?", [$date1, $date2])
+            // ->groupBy('date_after_duration')
+            ->get();
+    
+        if (count($purchaseorder) > 0) {
+            return response([
+                'message' => 'Retrieve All Success',
+                'data' => $purchaseorder
+            ], 200);
+        }
+    
         return response([
-            'message' => 'Retrieve All Success',
-            'data' => $purchaseorder
-        ], 200);
+            'message' => 'Empty',
+            'data' => null
+        ], 400);
     }
-
-    return response([
-        'message' => 'Empty',
-        'data' => null
-    ], 400);
-}
 
     public function countVehicleHired($date1,$date2){
         
