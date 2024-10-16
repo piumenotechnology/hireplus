@@ -197,6 +197,9 @@ class SalesOrderController extends Controller
     }
 
     public function store(Request $request){
+        DB::beginTransaction();
+        try{
+            
         $storeData = $request->all();
         $validate = Validator::make($storeData, [
             'id_purchase_order'         => 'required',
@@ -360,16 +363,26 @@ class SalesOrderController extends Controller
         //output: P00001
         // $salesorder->save();
         
-        $purchaseorder->residual_value = round($salesorder->residual_value,2);
+        $purchaseorder->residual_value = round($request->residual_value,2);
         $purchaseorder->save();
-
+        
         $purchaseorder->status_next_step = 'Hired';
         $purchaseorder->save();
+        
+        $purchaseorder->stock_status = NULL;
+        $purchaseorder->save();
+        
+         DB::commit();
 
         return response([             
             'message' => 'Add Sales Order Success',
             'data' => $salesorder,
         ],200);
+        
+    } catch (\Exception $e) {
+        DB::rollBack();
+        return response(['message' => 'An error occurred. Please try again later.'], 500);
+    }
     }
 
     public function destroy($id){
