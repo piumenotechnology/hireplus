@@ -126,7 +126,7 @@ class SalesOrderController extends Controller
         $salesorders = DB::table('sales_orders')
                       ->join('purchase_orders','purchase_orders.id','=','sales_orders.id_purchase_order')
                       ->select('sales_orders.id','sales_orders.agreement_number',
-                      'sales_orders.cust_name','sales_orders.contract_start_date','sales_orders.id_purchase_order','purchase_orders.vehicle_registration')
+                      'sales_orders.cust_name','sales_orders.contract_start_date','sales_orders.id_purchase_order','sales_orders.term_months','purchase_orders.vehicle_registration')
                       ->where('next_step_status_sales','Hired');
                     //   ->get();
 
