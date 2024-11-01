@@ -1,10 +1,10 @@
 <?php
 // Database connection details
 $host = 'localhost';
-$user = 'piumenos_demo';
-$password = '?wxjm5X]51%G';
-$database = 'piumenos_demo';
-$logFile = '/home/piumenos/demo_database/db_maintenance.log';
+$user = 'hnxhybwqsy';
+$password = 'p3YCzqWxjP';
+$database = 'hnxhybwqsy';
+$logFile = '/hnxhybwqsy/public_html/db_maintenance.log';
 
 // Log function
 function log_message($message, $logFile) {
