@@ -451,7 +451,7 @@ public function availableStock(Request $request){
     //if($rehiringorder == null) {
         
     $purchaseorder = DB::table('purchase_orders')
-                    ->select('purchase_orders.id','purchase_orders.vehicle_registration','purchase_orders.vehicle_manufactur','purchase_orders.vehicle_model','purchase_orders.colour','purchase_orders.vehicle_variant','purchase_orders.min_contract_price_satu','purchase_orders.min_contract_price_dua','purchase_orders.stock_status')
+                    ->select('purchase_orders.id','purchase_orders.vehicle_registration','purchase_orders.vehicle_manufactur','purchase_orders.vehicle_model','purchase_orders.colour','purchase_orders.vehicle_variant','purchase_orders.min_contract_price_satu','purchase_orders.min_contract_price_dua','purchase_orders.stock_status','purchase_orders.eta')
                     // ->whereRaw('status_next_step in ("Available")')
                     ->whereRaw('stock_status in ("Available")');
                     // ->get();
@@ -568,6 +568,37 @@ public function bookedStock(Request $request){
 
         return response([
             'message' => 'Update Vehicle Stock Status Failed',
+            'data' => null
+        ],400);
+    }
+
+    public function changeEta(Request $request, $id){
+        $purchaseorder = PurchaseOrder::find($id);
+        if(is_null($purchaseorder)){
+            return response([
+                'message' => 'Purchase Order Not Found',
+                'data' => null
+            ],404);
+        }
+        $updateData = $request->all();
+        $validate = Validator::make($updateData, [
+            'eta'             => 'nullable',
+        ]);
+
+        if($validate->fails())
+        return response(['message' => $validate->errors()],400);
+        
+        $purchaseorder->eta            = $updateData['eta'];
+        
+        if($purchaseorder->save()){
+            return response([
+                'message' => 'Update Vehicle ETA Success',
+                'data' => $purchaseorder,
+            ],200);
+        }
+
+        return response([
+            'message' => 'Update Vehicle ETA Failed',
             'data' => null
         ],400);
     }
