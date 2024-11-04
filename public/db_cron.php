@@ -4,7 +4,7 @@ $host = 'localhost';
 $user = 'hnxhybwqsy';
 $password = 'p3YCzqWxjP';
 $database = 'hnxhybwqsy';
-$logFile = '/hnxhybwqsy/public_html/db_maintenance.log';
+$logFile = '/hnxhybwqsy/public_html/public/db_maintenance.log';
 
 // Log function
 function log_message($message, $logFile) {
