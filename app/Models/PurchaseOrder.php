@@ -20,7 +20,7 @@ class PurchaseOrder extends Model
         'service_schedule_miles','service_schedule_years','last_service_mileage',
         'last_service_date',
         'financing_amount','regular_monthly_payment','status_next_step',
-        'vehicle_tracking','sum_docdepoth','tgl_available','stock_status'
+        'vehicle_tracking','sum_docdepoth','tgl_available','stock_status','eta'
     ];
 
     public function getCreatedAtAttribute(){
