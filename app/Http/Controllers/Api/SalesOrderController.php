@@ -97,7 +97,7 @@ class SalesOrderController extends Controller
         ],400);
     }
 
-    public function showAgreementNumberInVehicleSold(){
+    public function showAgreementNumberInVehicleSold(Request $request){
         $vehiclesold = VehicleSold::select('vehicle_solds.id_sales_order')->get();
         
         $salesorder = DB::table('sales_orders')
@@ -105,14 +105,21 @@ class SalesOrderController extends Controller
                     ->select('sales_orders.id','sales_orders.agreement_number','purchase_orders.vehicle_registration','sales_orders.next_step_status_sales','purchase_orders.status_next_step')
                     ->whereRaw('status_next_step in ("Available", "Hired")')
                     ->whereRaw('next_step_status_sales in ("Innactive")')
-                    ->whereNotIn('sales_orders.id',$vehiclesold)
-                    ->whereOr()
-                    ->get();
+                    ->whereNotIn('sales_orders.id',$vehiclesold);
+                    // ->whereOr()
+                    // ->get();
+                    
+        
+        if ($s = $request->input('search')) {
+            $salesorder->whereRaw("sales_orders.agreement_number LIKE '%" . $s . "%'");
+        }
 
-        if(count($salesorder) > 0){
+        $result = $salesorder->paginate(request()->per_page);
+
+        if(count($result) > 0){
             return response([
                 'message' => 'Retrieve All Success',
-                'data' => $salesorder
+                'data' => $result
             ],200);
         }
 
