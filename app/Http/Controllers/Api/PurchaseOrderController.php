@@ -483,7 +483,7 @@ public function availableStock(Request $request){
 
 public function potentialStock(Request $request){
     $purchaseorder = DB::table('purchase_orders')
-                    ->select('purchase_orders.id','purchase_orders.vehicle_registration','purchase_orders.vehicle_manufactur','purchase_orders.vehicle_model','purchase_orders.colour','purchase_orders.vehicle_variant','purchase_orders.min_contract_price_satu','purchase_orders.min_contract_price_dua','purchase_orders.stock_status')
+                    ->select('purchase_orders.id','purchase_orders.vehicle_registration','purchase_orders.vehicle_manufactur','purchase_orders.vehicle_model','purchase_orders.colour','purchase_orders.vehicle_variant','purchase_orders.min_contract_price_satu','purchase_orders.min_contract_price_dua','purchase_orders.stock_status','purchase_orders.eta')
                     ->whereRaw('stock_status in ("Potential")');
 
     if ($s = $request->input('search')) {
@@ -513,7 +513,7 @@ public function potentialStock(Request $request){
 
 public function bookedStock(Request $request){
     $purchaseorder = DB::table('purchase_orders')
-                    ->select('purchase_orders.id','purchase_orders.vehicle_registration','purchase_orders.vehicle_manufactur','purchase_orders.vehicle_model','purchase_orders.colour','purchase_orders.vehicle_variant','purchase_orders.min_contract_price_satu','purchase_orders.min_contract_price_dua','purchase_orders.stock_status')
+                    ->select('purchase_orders.id','purchase_orders.vehicle_registration','purchase_orders.vehicle_manufactur','purchase_orders.vehicle_model','purchase_orders.colour','purchase_orders.vehicle_variant','purchase_orders.min_contract_price_satu','purchase_orders.min_contract_price_dua','purchase_orders.stock_status','purchase_orders.eta')
                     ->whereRaw('stock_status in ("Booked")');
 
     if ($s = $request->input('search')) {
