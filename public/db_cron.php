@@ -34,8 +34,8 @@ $sql = "
 // Execute the update query and log the outcome
 if ($conn->query($sql) === TRUE) {
     $affectedRows = $conn->affected_rows;
-    log_message("Updated $affectedRows rows in `purchase_orders` to 'potential'.", $logFile);
-    echo "Updated $affectedRows rows in `purchase_orders` to 'potential'.\n";
+    log_message("Updated $affectedRows rows in `purchase_orders` to 'Potential'.", $logFile);
+    echo "Updated $affectedRows rows in `purchase_orders` to 'Potential'.\n";
 } else {
     log_message("Error updating records: " . $conn->error, $logFile);
     echo "Error updating records: " . $conn->error . "\n";
