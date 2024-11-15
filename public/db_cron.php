@@ -25,7 +25,7 @@ if ($conn->connect_error) {
 $sql = "
     UPDATE purchase_orders AS po
     INNER JOIN sales_orders AS so ON po.id = so.id_purchase_order
-    SET po.stock_status = 'potential'
+    SET po.stock_status = 'Potential'
     WHERE so.next_step_status_sales = 'Hired'
       AND CURRENT_DATE() >= DATE(so.contract_start_date) + INTERVAL so.term_months MONTH - INTERVAL 2 MONTH
       AND CURRENT_DATE() <= DATE(so.contract_start_date) + INTERVAL so.term_months MONTH
