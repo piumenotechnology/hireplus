@@ -29,24 +29,24 @@ class RehiringController extends Controller
             $rehiringorders->whereRaw("vehicle_registration LIKE '%" . $s . "%'")
             ->orWhereRaw("agreement_number LIKE '%" . $s . "%'");
         }
-                
+
         if ($sort = $request->input('sort')) {
             $rehiringorders->orderBy(request()->sort, $request->input('order') );
         }
-                
+
         $result = $rehiringorders->paginate(request()->per_page);
-                
+
         if(count($result) > 0){
             return response([
                 'message' => 'Retrieve All Success',
                 'data' => $result
             ],200);
         }
-                
+
         return response([
             'message' => 'Empty',
             'data' => null
-        ],400);         
+        ],400);
 
     }
 
@@ -65,7 +65,7 @@ class RehiringController extends Controller
     //              'data' => $rehiringorder
     //          ],200);
     //      }
-                
+
     //      return response([
     //          'message' => 'Empty',
     //          'data' => null
@@ -134,22 +134,25 @@ class RehiringController extends Controller
 
         $purchaseorder->status_next_step = 'Available';
         $purchaseorder->save();
-        
+
+        $purchaseorder->stock_status = 'Available';
+        $purchaseorder->save();
+
         $sales_order->next_step_status_sales = 'Innactive';
         $sales_order->save();
-         
+
         $amount_oi = RehiringOrder::join('other_incomes', 'other_incomes.id_purchase_order','=','rehiring_orders.id_purchase_order')
          ->whereRaw('rehiring_orders.id_purchase_order = '.$rehiringorder->id_purchase_order)
          ->value('amount_oi');
 
         $vehiclereturndate = \Carbon\Carbon::parse($request->vehicle_return_date);
         $contractstartdate = \Carbon\Carbon::parse($sales_order->contract_start_date);
-        
+
         //fo001
         if($rehiringorder->vehicle_return_date != null) {
             $sales_order->margin_term = $contractstartdate->diffInMonths($vehiclereturndate);
             $sales_order->save();
-        } 
+        }
 
         //rental income
         if($sales_order->next_step_status_sales != 'Hired') {
@@ -188,15 +191,15 @@ class RehiringController extends Controller
                 $sales_order->save();
             }
         }
-        
-        $sales_order->total_monthly_rental = $purchaseorder->regular_monthly_payment * 11; 
+
+        $sales_order->total_monthly_rental = $purchaseorder->regular_monthly_payment * 11;
         $sales_order->save();
 
 
         $rehiringorder->new_sales_order_no = IdGenerator::generate(['table' => 'rehiring_orders','field'=>'new_sales_order_no', 'length' => 8, 'prefix' =>'NSO-']);
         //output: P00001
         $rehiringorder->save();
-        
+
         return response([
             'message' => 'Add Rehiring Order Success',
             'data' => $rehiringorder,
@@ -205,7 +208,7 @@ class RehiringController extends Controller
 
     public function destroy($id){
         $rehiringorder = RehiringOrder::find($id);
-       
+
         if(is_null($rehiringorder)){
             return response([
                 'message' => 'Rehiring Order Not Found',
@@ -225,7 +228,7 @@ class RehiringController extends Controller
                 'data' => $rehiringorder,
             ],200);
         }
-        
+
         return response([
             'message' => 'Delete Rehiring Order Failed',
             'data' => null,
@@ -254,7 +257,7 @@ class RehiringController extends Controller
 
         if($validate->fails())
         return response(['message' => $validate->errors()],400);
-        
+
         //$rehiringorder->next_step                  = $updateData['next_step'];
         $rehiringorder->id_sales_order             = $updateData['id_sales_order'];
         $rehiringorder->new_sales_order_no         = $updateData['new_sales_order_no'];
@@ -263,7 +266,7 @@ class RehiringController extends Controller
         //$rehiringorder->sold_price                 = $updateData['sold_price'];
 
         $sales_order = SalesOrder::find($rehiringorder->id_sales_order);
-        
+
         $purchaseorder = PurchaseOrder::find($rehiringorder->id_purchase_order);
 
         //update status current contract menjadi 'Innactive'
@@ -276,10 +279,10 @@ class RehiringController extends Controller
         $amount_oi = RehiringOrder::join('other_incomes', 'other_incomes.id_purchase_order','=','rehiring_orders.id_purchase_order')
         ->whereRaw('rehiring_orders.id_purchase_order = '.$rehiringorder->id_purchase_order)
         ->value('amount_oi');
-        
+
         $vehiclereturndate = \Carbon\Carbon::parse($request->vehicle_return_date);
         $contractstartdate = \Carbon\Carbon::parse($sales_order->contract_start_date);
-             
+
         //fo001
         if($rehiringorder->vehicle_return_date != null) {
             $sales_order->margin_term = $contractstartdate->diffInMonths($vehiclereturndate);
@@ -323,11 +326,11 @@ class RehiringController extends Controller
                 $sales_order->save();
             }
         }
-        
-        $sales_order->total_monthly_rental = $purchaseorder->regular_monthly_payment * 11; 
+
+        $sales_order->total_monthly_rental = $purchaseorder->regular_monthly_payment * 11;
         $sales_order->save();
 
-        
+
         if($rehiringorder->save()){
             return response([
                 'message' => 'Update Rehiring Order Success',
@@ -361,7 +364,7 @@ class RehiringController extends Controller
 
     //     if($validate->fails())
     //     return response(['message' => $validate->errors()],400);
-        
+
     //     $rehiringorder->next_step                  = $updateData['next_step'];
     //     $rehiringorder->id_sales_order             = $updateData['id_sales_order'];
     //     $rehiringorder->id_purchase_order          = $updateData['id_purchase_order'];
@@ -369,16 +372,16 @@ class RehiringController extends Controller
     //     $rehiringorder->sold_price                 = $updateData['sold_price'];
 
     //     $rehiringorder->sold_price = round($rehiringorder->sold_price,2);
-        
+
     //     $sales_order = SalesOrder::find($rehiringorder->id_sales_order);
 
     //     $amount_oi = RehiringOrder::join('other_incomes', 'other_incomes.id_purchase_order','=','rehiring_orders.id_purchase_order')
     //     ->whereRaw('rehiring_orders.id_purchase_order = '.$rehiringorder->id_purchase_order)
     //     ->value('amount_oi');
-        
+
     //     $vehiclereturndate = \Carbon\Carbon::parse($request->vehicle_return_date);
     //     $contractstartdate = \Carbon\Carbon::parse($sales_order->contract_start_date);
-             
+
     //     //fo001
     //     if($rehiringorder->vehicle_return_date != null) {
     //         $sales_order->margin_term = $contractstartdate->diffInMonths($vehiclereturndate);
@@ -406,7 +409,7 @@ class RehiringController extends Controller
 
     //     //fo007
     //     if($rehiringorder->next_step == 'Sold'){
-    //         $sales_order->total_income_new = round(($rehiringorder->sold_price + $sales_order->first_payment + ($sales_order->monthly_rental * ($sales_order->term_months - 1))),2); 
+    //         $sales_order->total_income_new = round(($rehiringorder->sold_price + $sales_order->first_payment + ($sales_order->monthly_rental * ($sales_order->term_months - 1))),2);
     //         $sales_order->save();
     //      }
 
@@ -426,6 +429,6 @@ class RehiringController extends Controller
     //         'data' => null
     //     ],400);
     // }
-    
+
 }
 

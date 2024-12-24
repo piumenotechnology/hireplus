@@ -25,20 +25,20 @@ class OtherCostController extends Controller
         if ($s = $request->input('search')) {
             $othercost->whereRaw("vehicle_registration LIKE '%" . $s . "%'");
         }
-                
+
         if ($sort = $request->input('sort')) {
             $othercost->orderBy(request()->sort, $request->input('order') );
         }
-                
+
         $result = $othercost->paginate(request()->per_page);
-                
+
         if(count($result) > 0){
             return response([
                 'message' => 'Retrieve All Success',
                 'data' => $result
         ],200);
         }
-                
+
         return response([
             'message' => 'Empty',
             'data' => null
@@ -97,7 +97,7 @@ class OtherCostController extends Controller
                 'data' => $othercost,
             ],200);
         }
-        
+
         return response([
             'message' => 'Delete Other Cost Failed',
             'data' => null,
@@ -131,7 +131,7 @@ class OtherCostController extends Controller
         $othercost->description_expenses          = $updateData['description_expenses'];
         $othercost->vendor_name                   = $updateData['vendor_name'];
         $othercost->amount_oc                     = $updateData['amount_oc'];
-        
+
         if($othercost->save()){
             return response([
                 'message' => 'Update Other Cost Success',
@@ -144,6 +144,6 @@ class OtherCostController extends Controller
             'data' => null
         ],400);
     }
-    
+
 }
 

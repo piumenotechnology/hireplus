@@ -20,25 +20,25 @@ class OtherIncomeController extends Controller
                      ->select('other_incomes.*','purchase_orders.vehicle_registration');
                      //->paginate(request()->per_page);
                      //->get();
-                     
+
         if ($s = $request->input('search')) {
             $otherincome->whereRaw("vehicle_registration LIKE '%" . $s . "%'");
-                            
+
         }
-                
+
         if ($sort = $request->input('sort')) {
             $otherincome->orderBy(request()->sort, $request->input('order') );
         }
-                
+
         $result = $otherincome->paginate(request()->per_page);
-                
+
         if(count($result) > 0){
             return response([
                 'message' => 'Retrieve All Success',
                 'data' => $result
                 ],200);
         }
-                
+
         return response([
             'message' => 'Empty',
             'data' => null
@@ -70,7 +70,7 @@ class OtherIncomeController extends Controller
             'description_income'           => 'required',
             'amount_oi'                    => 'required|numeric',
             'payment_profile'              => 'required',
-            
+
         ]);
 
         if($validate->fails())
@@ -100,7 +100,7 @@ class OtherIncomeController extends Controller
                 'data' => $otherincome,
             ],200);
         }
-        
+
         return response([
             'message' => 'Delete Other Income Failed',
             'data' => null,
@@ -135,7 +135,7 @@ class OtherIncomeController extends Controller
         $otherincome->amount_oi                     = $updateData['amount_oi'];
         $otherincome->payment_profile               = $updateData['payment_profile'];
 
-       
+
         if($otherincome->save()){
             return response([
                 'message' => 'Update Other Income Success',
@@ -148,6 +148,6 @@ class OtherIncomeController extends Controller
             'data' => null
         ],400);
     }
-    
+
 }
 

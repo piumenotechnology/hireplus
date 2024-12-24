@@ -25,8 +25,8 @@ class BaseInterestController extends Controller
 
     public function index(){
         $baseinterest = BaseInterest::All();
-        
-                
+
+
          if(count($baseinterest) > 0){
              return response([
                  'message' => 'Retrieve All Success',
@@ -44,7 +44,7 @@ class BaseInterestController extends Controller
 
         // $result = $endDateCredit->greaterThanOrEqualTo($date);
 
-        
+
         return response([
             'message' => 'Empty',
             'data' => $baseinterest
@@ -52,7 +52,7 @@ class BaseInterestController extends Controller
     }
 
     public function findBaseInterest(){
-        
+
         $findbaseinterest = DB::table('base_interests')
                     ->select('base_interests.percentage')
                     ->whereRaw('status in ("active")')
@@ -64,7 +64,7 @@ class BaseInterestController extends Controller
                 'data' => $findbaseinterest
             ],200);
         }
-                            
+
         return response([
                 'message' => 'Empty',
                 'data' => null
@@ -106,25 +106,25 @@ class BaseInterestController extends Controller
         }
 
         $baseinterest = BaseInterest::create($storeData);
-        
+
         $this->id = $baseinterest->id;
         $this->percentage = $baseinterest->percentage;
         $this->start_date = $baseinterest->start_date;
-        
+
 
         $baseInterestDetail = BaseInterestDetail::groupBy("id_purchase_order")->get();
-       
+
             foreach ($baseInterestDetail as $item) {
                 $financingamount = PurchaseOrder::whereRaw('id = "'.$item->id_purchase_order.'"')->value('financing_amount');
                 $purchaseorder = PurchaseOrder::whereRaw('id = "'.$item->id_purchase_order.'"')->first();
-    
+
                 $endDate = date('Y-m-d', strtotime($purchaseorder->hire_purchase_starting_date.  $purchaseorder->hp_term.' month'));
-    
+
                 $date = Carbon::createFromFormat('Y-m-d', substr($this->start_date, 0, 10));
                 $endDateCredit = Carbon::createFromFormat('Y-m-d', substr($endDate, 0, 10));
-    
+
                 $result = $endDateCredit->greaterThanOrEqualTo($date);
-    
+
                 if($result){
                     $baseInterestDetail = BaseInterestDetail::create([
                         'id_base_interest' => $this->id,
@@ -132,10 +132,10 @@ class BaseInterestController extends Controller
                         'total_base_interest' => (($this->percentage/100) * $financingamount)/12
                     ]);
                 }
-    
+
             }
-        
-        
+
+
         return response([
             'message' => 'Add Base Interest Success',
             'data' => $baseinterest,
@@ -158,7 +158,7 @@ class BaseInterestController extends Controller
                 'data' => $baseinterest,
             ],200);
         }
-        
+
         return response([
             'message' => 'Delete Base Interest Failed',
             'data' => null,
@@ -192,7 +192,7 @@ class BaseInterestController extends Controller
         $startDate = $baseinterest->start_date;
         $month = $purchaseorder->hp_term;
         $newDate = date('Y-m-d', strtotime($startDate.  $month.' month'));
-        
+
         if($baseinterest->save()){
             return response([
                 'message' => 'Update Base Interest Success',
@@ -227,7 +227,7 @@ class BaseInterestController extends Controller
 
         $end_date_now = Carbon::now()->format('Y-m-d');
         $baseinterest->end_date = $end_date_now;
-        
+
         if($baseinterest->save()){
             return response([
                 'message' => 'Update Base Interest Success',
@@ -249,18 +249,18 @@ class BaseInterestController extends Controller
                        ->orderBy('start_date')
                        // ->pluck('percentage');
                        ->get();
-       
+
        if(count($baseinterest) > 0){
            return response([
                'message' => 'Retrieve All Success',
                'data' => $baseinterest
            ],200);
        }
-   
+
        return response([
            'message' => 'Empty',
            'data' => null
        ],400);
    }
-    
+
 }

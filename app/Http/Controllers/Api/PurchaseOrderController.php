@@ -44,7 +44,7 @@ class PurchaseOrderController extends Controller
         //$purchaseorders = PurchaseOrder::all()
 
         // $purchaseorders = DB::table('purchase_orders')->paginate(request()->per_page);
-        
+
         $query = PurchaseOrder::query();
 
         if ($s = $request->input('search')) {
@@ -73,7 +73,7 @@ class PurchaseOrderController extends Controller
     }
 
     public function showVehicleNumberinSales(){
-        
+
         $purchaseorder = DB::table('purchase_orders')
                      ->select('purchase_orders.vehicle_registration')
                      ->where('status_next_step','Available')
@@ -122,7 +122,7 @@ class PurchaseOrderController extends Controller
                  'data' => $purchaseorder
              ],200);
          }
-              
+
          return response([
              'message' => 'Empty',
              'data' => null
@@ -150,7 +150,7 @@ class PurchaseOrderController extends Controller
                 'data' => $result
             ],200);
         }
-             
+
         return response([
             'message' => 'Empty',
             'data' => null
@@ -170,7 +170,7 @@ class PurchaseOrderController extends Controller
                 'data' => $purchaseorder
             ],200);
         }
-             
+
         return response([
             'message' => 'Empty',
             'data' => null
@@ -180,7 +180,7 @@ class PurchaseOrderController extends Controller
     //
     public function listVehicleById($id){
         $rehiringByPurchaseId = RehiringOrder::whereRaw('id_purchase_order = '.$id)->first();
-        
+
         if($rehiringByPurchaseId != null){
             $purchaseorder = SalesOrder::join('purchase_orders','purchase_orders.id','=','sales_orders.id_purchase_order')
                         ->join('rehiring_orders','rehiring_orders.id_purchase_order','=','purchase_orders.id')
@@ -198,7 +198,7 @@ class PurchaseOrderController extends Controller
                 'data' => $purchaseorder
             ],200);
         }
-                
+
         return response([
             'message' => 'Empty',
             'data' => null
@@ -218,7 +218,7 @@ class PurchaseOrderController extends Controller
                     // ->groupBy('agreement_number')
                     //->sum('total_income_new')
                     ->get();
-        
+
 
         if(count($purchaseorder) > 0){
             return response([
@@ -226,7 +226,7 @@ class PurchaseOrderController extends Controller
                 'data' => $purchaseorder
             ],200);
         }
-            
+
         return response([
             'message' => 'Empty',
             'data' => null
@@ -244,8 +244,8 @@ class PurchaseOrderController extends Controller
                            ->whereRaw('purchase_orders.id = '.$id)->take(1)->get();
                            //->groupBy('agreement_number')
                            //->sum('total_income_new')
-                           
-       
+
+
 
          if(count($purchaseorder) > 0){
              return response([
@@ -253,7 +253,7 @@ class PurchaseOrderController extends Controller
                  'data' => $purchaseorder
              ],200);
          }
-           
+
         return response([
             'message' => 'Empty',
             'data' => null
@@ -272,7 +272,7 @@ class PurchaseOrderController extends Controller
                             ->join('vehicle_solds','sales_orders.id','=','vehicle_solds.id_sales_order')
                             ->join('other_incomes','purchase_orders.id','=','other_incomes.id_purchase_order')
                             ->join('other_costs','purchase_orders.id','=','other_costs.id_purchase_order')
-                            ->selectRaw('round((SUM(total_income) + SUM(amount_oi)),2) as sum_total_income, round(SUM(rental_income),2) as sum_rental_income, 
+                            ->selectRaw('round((SUM(total_income) + SUM(amount_oi)),2) as sum_total_income, round(SUM(rental_income),2) as sum_rental_income,
                             round((AVG(total_cost) + SUM(amount_oc)),2) as sum_total_cost, purchase_orders.vehicle_registration,
                             round(((SUM(total_income) + amount_oi)-AVG(total_cost)),2) as margin, vehicle_solds.sold_price, sales_orders.residual_value')
                             ->whereRaw('purchase_orders.id = '.$id)
@@ -282,7 +282,7 @@ class PurchaseOrderController extends Controller
                 $purchaseorder = DB::table('sales_orders')
                             ->join('purchase_orders','purchase_orders.id','=','sales_orders.id_purchase_order')
                             ->leftJoin('vehicle_solds','purchase_orders.id','=','vehicle_solds.id_purchase_order')
-                            ->selectRaw('round(SUM(total_income),2) as sum_total_income, round(SUM(rental_income),2) as sum_rental_income, 
+                            ->selectRaw('round(SUM(total_income),2) as sum_total_income, round(SUM(rental_income),2) as sum_rental_income,
                             round(AVG(total_cost),2) as sum_total_cost, purchase_orders.vehicle_registration,
                             round(SUM(total_income)-AVG(total_cost),2) as margin, vehicle_solds.sold_price, sales_orders.residual_value')
                             ->whereRaw('purchase_orders.id = '.$id)
@@ -295,7 +295,7 @@ class PurchaseOrderController extends Controller
                  'data' => $purchaseorder
              ],200);
          }
-            
+
          return response([
              'message' => 'Empty',
              'data' => null
@@ -310,14 +310,14 @@ class PurchaseOrderController extends Controller
                         ->selectRaw('round(SUM(total_income),2) as sum_total_income')
                         ->whereRaw('purchase_orders.id = '.$id)
                         ->first();
-    
+
      if($purchaseorder != null){
          return response([
              'message' => 'Retrieve All Success',
              'data' => $purchaseorder
          ],200);
      }
-        
+
      return response([
          'message' => 'Empty',
          'data' => null
@@ -449,11 +449,11 @@ public function availableStock(Request $request){
     //$rehiringorder = RehiringOrder::select('rehiring_orders.id_purchase_order')->get();
 
     //if($rehiringorder == null) {
-        
+
     $purchaseorder = DB::table('purchase_orders')
                     ->select('purchase_orders.id','purchase_orders.vehicle_registration','purchase_orders.vehicle_manufactur','purchase_orders.vehicle_model','purchase_orders.colour','purchase_orders.vehicle_variant','purchase_orders.min_contract_price_satu','purchase_orders.min_contract_price_dua','purchase_orders.stock_status','purchase_orders.eta')
                     // ->whereRaw('status_next_step in ("Available")')
-                    ->whereRaw('stock_status in ("Available")');
+                    ->whereRaw('stock_status in ("Available") AND status_next_step in ("Available")');
                     // ->get();
 
     if ($s = $request->input('search')) {
@@ -483,7 +483,7 @@ public function availableStock(Request $request){
 
 public function potentialStock(Request $request){
     $purchaseorder = DB::table('purchase_orders')
-                    ->select('purchase_orders.id','purchase_orders.vehicle_registration','purchase_orders.vehicle_manufactur','purchase_orders.vehicle_model','purchase_orders.colour','purchase_orders.vehicle_variant','purchase_orders.min_contract_price_satu','purchase_orders.min_contract_price_dua','purchase_orders.stock_status')
+                    ->select('purchase_orders.id','purchase_orders.vehicle_registration','purchase_orders.vehicle_manufactur','purchase_orders.vehicle_model','purchase_orders.colour','purchase_orders.vehicle_variant','purchase_orders.min_contract_price_satu','purchase_orders.min_contract_price_dua','purchase_orders.stock_status','purchase_orders.eta')
                     ->whereRaw('stock_status in ("Potential")');
 
     if ($s = $request->input('search')) {
@@ -513,7 +513,7 @@ public function potentialStock(Request $request){
 
 public function bookedStock(Request $request){
     $purchaseorder = DB::table('purchase_orders')
-                    ->select('purchase_orders.id','purchase_orders.vehicle_registration','purchase_orders.vehicle_manufactur','purchase_orders.vehicle_model','purchase_orders.colour','purchase_orders.vehicle_variant','purchase_orders.min_contract_price_satu','purchase_orders.min_contract_price_dua','purchase_orders.stock_status')
+                    ->select('purchase_orders.id','purchase_orders.vehicle_registration','purchase_orders.vehicle_manufactur','purchase_orders.vehicle_model','purchase_orders.colour','purchase_orders.vehicle_variant','purchase_orders.min_contract_price_satu','purchase_orders.min_contract_price_dua','purchase_orders.stock_status','purchase_orders.eta')
                     ->whereRaw('stock_status in ("Booked")');
 
     if ($s = $request->input('search')) {
@@ -556,9 +556,9 @@ public function bookedStock(Request $request){
 
         if($validate->fails())
         return response(['message' => $validate->errors()],400);
-        
+
         $purchaseorder->stock_status            = $updateData['stock_status'];
-        
+
         if($purchaseorder->save()){
             return response([
                 'message' => 'Update Vehicle Stock Status Success',
@@ -587,9 +587,9 @@ public function bookedStock(Request $request){
 
         if($validate->fails())
         return response(['message' => $validate->errors()],400);
-        
+
         $purchaseorder->eta            = $updateData['eta'];
-        
+
         if($purchaseorder->save()){
             return response([
                 'message' => 'Update Vehicle ETA Success',
@@ -605,7 +605,7 @@ public function bookedStock(Request $request){
 
     public function showVehicleNumber(){
         $rehiringorder = RehiringOrder::select('rehiring_orders.id_purchase_order')->get();
-        
+
         $purchaseorder = DB::table('purchase_orders')
                     ->select('id','vehicle_registration')
                     ->whereNotIn('id',$rehiringorder)
@@ -627,7 +627,7 @@ public function bookedStock(Request $request){
 
     public function showVehicleNumberInOtherCost(){
         $othercost = OtherCost::select('other_costs.id_purchase_order')->get();
-        
+
         $purchaseorder = DB::table('purchase_orders')
                     ->select('id','vehicle_registration')
                     ->whereNotIn('id',$othercost)
@@ -649,7 +649,7 @@ public function bookedStock(Request $request){
 
     public function showVehicleNumberInOtherIncome(){
         $otherincome = OtherIncome::select('other_incomes.id_purchase_order')->get();
-        
+
         $purchaseorder = DB::table('purchase_orders')
                     ->select('id','vehicle_registration')
                     ->whereNotIn('id',$otherincome)
@@ -682,7 +682,7 @@ public function bookedStock(Request $request){
                         //->groupByRaw('agreement_number')
                         ->paginate(request()->per_page);
                         //->get();
-        
+
         if(count($purchaseorder) > 0){
             return response([
                 'message' => 'Retrieve All Success',
@@ -702,7 +702,7 @@ public function bookedStock(Request $request){
                         ->whereBetween('purchase_orders.hire_purchase_starting_date',[$date1,$date2])
                         ->select('purchase_orders.*')
                         ->get();
-        
+
         if(count($purchaseorder) > 0){
             return response([
                 'message' => 'Retrieve All Success',
@@ -735,7 +735,7 @@ public function bookedStock(Request $request){
     //     ],400);
     // }
 
-    
+
 
     //  public function showVehicleRehiringOrder($id){
     //      $purchaseorder = DB::table('purchase_orders')
@@ -751,7 +751,7 @@ public function bookedStock(Request $request){
     //              'data' => $purchaseorder
     //          ],200);
     //      }
-                
+
     //      return response([
     //          'message' => 'Empty',
     //          'data' => null
@@ -815,18 +815,18 @@ public function bookedStock(Request $request){
         $purchaseorder->documentation_fees_pu = round($purchaseorder->documentation_fees_pu,2);
         $purchaseorder->final_fees = round($purchaseorder->final_fees,2);
         $purchaseorder->other_fees = round($purchaseorder->other_fees,2);
-        
+
         $purchaseorder->price_otr = round($purchaseorder->price_otr,2);
         $purchaseorder->monthly_payment = round($purchaseorder->monthly_payment,2);
         $purchaseorder->final_payment = round($purchaseorder->final_payment,2);
-        
+
         $purchaseorder->residual_value = round($purchaseorder->residual_value,2);
 
         $purchaseorder->status_next_step = 'Available';
 
         //isi purchase date di tgl_available
         $purchaseorder->tgl_available = $purchaseorder->hire_purchase_starting_date;
-        
+
         //isi vehicle stock status
         $purchaseorder->stock_status = $purchaseorder->stock_status;
 
@@ -834,7 +834,7 @@ public function bookedStock(Request $request){
         // if($purchaseorder->purchase_method == 'Hire Purchase'){
         //     $purchaseorder->hp_interest_per_annum = 0;
         // }
-        
+
         //fo003 //Financing Amount
          if($purchaseorder->purchase_method != 'Hire Purchase' && $purchaseorder->purchase_method != 'Rent/Return') {
              $purchaseorder->financing_amount = 0;
@@ -863,7 +863,7 @@ public function bookedStock(Request $request){
             $purchaseorder->save();
 
         }
-          
+
         //fo0012 vehicle_tracking
         if($purchaseorder->purchase_method == 'Cash') {
             $purchaseorder->vehicle_tracking = 0;
@@ -873,10 +873,10 @@ public function bookedStock(Request $request){
             $purchaseorder->save();
         }
 
-        //fo009 //sum_docdepoth 
+        //fo009 //sum_docdepoth
         $purchaseorder->sum_docdepoth = round($purchaseorder->documentation_fees_pu + $purchaseorder->hp_deposit_amount + $purchaseorder->other_fees,2);
         $purchaseorder->save();
-        
+
         // $baseInterest = BaseInterest::whereRaw('status = "active"')->first();
 
         // $baseInterestDetail = BaseInterestDetail::create([
@@ -900,13 +900,13 @@ public function bookedStock(Request $request){
                 'data' => null
             ],404);
         }
-        
+
         $deleteContract = SalesOrder::where('id_purchase_order',$purchaseorder->id)
                 ->delete();
 
         $deleteRehiring = RehiringOrder::where('id_purchase_order',$purchaseorder->id)
                 ->delete();
-        
+
         $deleteVehicleSold = VehicleSold::where('id_purchase_order',$purchaseorder->id)
                 ->delete();
 
@@ -922,7 +922,7 @@ public function bookedStock(Request $request){
                 'data' => $purchaseorder,
             ],200);
         }
-        
+
         return response([
             'message' => 'Delete Purchase Order Failed',
             'data' => null,
@@ -1029,7 +1029,7 @@ public function bookedStock(Request $request){
         $purchaseorder->residual_value = round($purchaseorder->residual_value,2);
 
         $purchaseorder->tgl_available = $purchaseorder->hire_purchase_starting_date;
-        
+
         //fo003 //Financing Amount
         if($purchaseorder->purchase_method != 'Hire Purchase' && $purchaseorder->purchase_method != 'Rent/Return') {
             $purchaseorder->financing_amount = 0;
@@ -1058,7 +1058,7 @@ public function bookedStock(Request $request){
            $purchaseorder->save();
 
        }
-         
+
        //fo0012 vehicle_tracking
        if($purchaseorder->purchase_method == 'Cash') {
            $purchaseorder->vehicle_tracking = 0;
@@ -1068,7 +1068,7 @@ public function bookedStock(Request $request){
            $purchaseorder->save();
        }
 
-       //fo009 //sum_docdepoth 
+       //fo009 //sum_docdepoth
        $purchaseorder->sum_docdepoth = round($purchaseorder->documentation_fees_pu + $purchaseorder->hp_deposit_amount + $purchaseorder->other_fees,2);
        $purchaseorder->save();
 
@@ -1091,7 +1091,7 @@ public function bookedStock(Request $request){
             'data' => null
         ],400);
     }
-    
+
     // public function showDashboard($date1,$date2){
 
     //     $purchaseorder = DB::table('sales_orders')
@@ -1103,21 +1103,21 @@ public function bookedStock(Request $request){
     //                             ->whereBetween('sales_orders.contract_start_date',[$date1,$date2])
     //                             ->groupBy('agreement_number')
     //                             ->get();
-        
+
     //     if(count($purchaseorder) > 0){
     //         return response([
     //             'message' => 'Retrieve All Success',
     //             'data' => $purchaseorder
     //         ],200);
     //     }
-    
+
     //     return response([
     //         'message' => 'Empty',
     //         'data' => null
     //     ],400);
     // }
-    
-    
+
+
     public function showDashboard($date1, $date2)
     {
         $purchaseorder = DB::table('sales_orders')
@@ -1132,14 +1132,14 @@ public function bookedStock(Request $request){
             ->whereRaw("DATE_ADD(sales_orders.contract_start_date, INTERVAL sales_orders.term_months MONTH) BETWEEN ? AND ?", [$date1, $date2])
             // ->groupBy('date_after_duration')
             ->get();
-    
+
         if (count($purchaseorder) > 0) {
             return response([
                 'message' => 'Retrieve All Success',
                 'data' => $purchaseorder
             ], 200);
         }
-    
+
         return response([
             'message' => 'Empty',
             'data' => null
@@ -1147,41 +1147,41 @@ public function bookedStock(Request $request){
     }
 
     public function countVehicleHired($date1,$date2){
-        
+
         $purchaseorder = DB::table('purchase_orders')
                     ->select('vehicle_registration')
                     ->whereBetween('purchase_orders.hire_purchase_starting_date',[$date1,$date2])
                     ->whereRaw('status_next_step in ("Hired")')
                     ->get()->count();
-    
+
         if($purchaseorder != null){
             return response([
                 'message' => 'Retrieve All Success',
                 'data' => $purchaseorder
             ],200);
         }
-                            
+
         return response([
                 'message' => 'Empty',
                 'data' => null
         ],400);
     }
-    
+
     public function countVehicleSold($date1,$date2){
-            
+
         $purchaseorder = DB::table('purchase_orders')
                     ->select('vehicle_registration')
                     ->whereBetween('purchase_orders.hire_purchase_starting_date',[$date1,$date2])
                     ->whereRaw('status_next_step in ("Sold")')
                     ->get()->count();
-    
+
         if($purchaseorder != null){
             return response([
                 'message' => 'Retrieve All Success',
                 'data' => $purchaseorder
             ],200);
         }
-                            
+
         return response([
                 'message' => 'Empty',
                 'data' => null

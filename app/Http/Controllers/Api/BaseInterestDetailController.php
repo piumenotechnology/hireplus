@@ -34,7 +34,7 @@ class BaseInterestDetailController extends Controller
     ],400);
 
     }
-    
+
     public function store(Request $request){
         $storeData = $request->all();
         $validate = Validator::make($storeData, [

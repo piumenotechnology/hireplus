@@ -102,7 +102,7 @@ class MileageController extends Controller
                 'data' => $mileage,
             ],200);
         }
-        
+
         return response([
             'message' => 'Delete Mileage Failed',
             'data' => null,
@@ -132,7 +132,7 @@ class MileageController extends Controller
         $mileage->id_purchase_order             = $updateData['id_purchase_order'];
         $mileage->tgl_mileage                   = $updateData['tgl_mileage'];
         $mileage->jumlah_mileage                = $updateData['jumlah_mileage'];
-        
+
         if($mileage->save()){
             return response([
                 'message' => 'Update Mileage Success',
@@ -145,5 +145,5 @@ class MileageController extends Controller
             'data' => null
         ],400);
     }
-    
+
 }
