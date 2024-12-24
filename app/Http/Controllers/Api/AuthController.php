@@ -9,8 +9,6 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\DB;
 
-
-
 class AuthController extends Controller
 {
     public function register(Request $request)
@@ -86,25 +84,36 @@ class AuthController extends Controller
             $user = Auth::user();
             $token = $user->createToken('Authentication Token')->accessToken;
 
-            // Fetch user permissions
-            $permissions = DB::table('user_permissions')
-                ->join('permissions', 'permissions.id', '=', 'user_permissions.permission_id')
-                ->join('subjects', 'subjects.id', '=', 'permissions.subject_id')
-                ->join('actions', 'actions.id', '=', 'permissions.action_id')
-                ->select(
-                    'subjects.name as subject',
-                    DB::raw('GROUP_CONCAT(actions.name) as actions')
-                )
-                ->where('user_permissions.role_id', $user->position)
-                ->groupBy('subjects.name')
-                ->get();
+            // // Fetch user permissions
+            // $permissions = DB::table('user_permissions')
+            //     ->join('permissions', 'permissions.id', '=', 'user_permissions.permission_id')
+            //     ->join('subjects', 'subjects.id', '=', 'permissions.subject_id')
+            //     ->join('actions', 'actions.id', '=', 'permissions.action_id')
+            //     ->select(
+            //         'subjects.name as subject',
+            //         DB::raw('GROUP_CONCAT(actions.name) as actions')
+            //     )
+            //     ->where('user_permissions.role_id', $user->position)
+            //     ->groupBy('subjects.name')
+            //     ->get();
+
+            $cekData = DB::table('user_permissions')
+            ->join('user_roles', 'user_roles.id', '=', 'user_permissions.role_id')
+            ->join('permissions', 'permissions.id', '=', 'user_permissions.permission_id')
+            ->join('subjects', 'subjects.id', '=', 'permissions.subject_id')
+            ->join('actions', 'actions.id', '=', 'permissions.action_id')
+            ->select(DB::raw('CONCAT_WS(".",subjects.slug, actions.name) as permissions'))
+            ->where('user_roles.id',  $user->position)
+            // ->get()
+            ->pluck('permissions')
+            ->toArray();
 
 
-            $permissions->transform(function ($permission) {
-                $permission->subject = explode(',', $permission->subject);
-                $permission->actions = explode(',', $permission->actions);
-                return $permission;
-            });
+            // $permissions->transform(function ($permission) {
+            //     $permission->subject = explode(',', $permission->subject);
+            //     $permission->actions = explode(',', $permission->actions);
+            //     return $permission;
+            // });
 
             $posti = DB::table('users')
             ->join('user_roles', 'user_roles.id', '=', 'users.position')
@@ -117,7 +126,8 @@ class AuthController extends Controller
             return response([
                 'message' => 'Authenticated',
                 'user' => $user,
-                'capability' => $permissions,
+                'capability' => $cekData,
+                // 'cek data' =>  $cekData,
                 'token_type' => 'Bearer',
                 'access_token' => $token,
             ], 200);
