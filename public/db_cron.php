@@ -29,7 +29,7 @@ $sql = "
     WHERE
         so.next_step_status_sales = 'Hired'
     AND
-        po.stock_status NOT NULL
+        po.stock_status IS NULL
     AND
         CURRENT_DATE() >= DATE(so.contract_start_date) + INTERVAL so.term_months MONTH - INTERVAL 2 MONTH
     AND
