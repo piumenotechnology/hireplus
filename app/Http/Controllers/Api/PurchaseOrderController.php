@@ -1092,51 +1092,174 @@ public function bookedStock(Request $request){
         ],400);
     }
 
-    // public function showDashboard($date1,$date2){
-
-    //     $purchaseorder = DB::table('sales_orders')
-    //                             ->leftJoin('purchase_orders','purchase_orders.id','=','sales_orders.id_purchase_order')
-    //                             ->leftJoin('vehicle_solds','sales_orders.id','=','vehicle_solds.id_sales_order')
-    //                             ->leftJoin('other_incomes','purchase_orders.id','=','other_incomes.id_purchase_order')
-    //                             ->leftJoin('other_costs','purchase_orders.id','=','other_costs.id_purchase_order')
-    //                             ->select('*')
-    //                             ->whereBetween('sales_orders.contract_start_date',[$date1,$date2])
-    //                             ->groupBy('agreement_number')
-    //                             ->get();
-
-    //     if(count($purchaseorder) > 0){
-    //         return response([
-    //             'message' => 'Retrieve All Success',
-    //             'data' => $purchaseorder
-    //         ],200);
-    //     }
-
-    //     return response([
-    //         'message' => 'Empty',
-    //         'data' => null
-    //     ],400);
-    // }
-
 
     public function showDashboard($date1, $date2)
     {
         $purchaseorder = DB::table('sales_orders')
-            ->leftJoin('purchase_orders', 'purchase_orders.id', '=', 'sales_orders.id_purchase_order')
+            ->join('purchase_orders', 'sales_orders.id_purchase_order', '=', 'purchase_orders.id')
             ->leftJoin('vehicle_solds', 'sales_orders.id', '=', 'vehicle_solds.id_sales_order')
             ->leftJoin('other_incomes', 'purchase_orders.id', '=', 'other_incomes.id_purchase_order')
             ->leftJoin('other_costs', 'purchase_orders.id', '=', 'other_costs.id_purchase_order')
-            ->select(
-                '*',
+            ->select([
+                'sales_orders.*',
+                'purchase_orders.*',
+                'vehicle_solds.*',
+                'other_incomes.*',
+                'other_costs.*',
+                DB::raw('(SELECT SUM(base_interest_details.total_base_interest)
+                          FROM base_interest_details
+                          WHERE base_interest_details.id_purchase_order = purchase_orders.id)
+                          AS total_base_interest'),
                 DB::raw("DATE_ADD(sales_orders.contract_start_date, INTERVAL sales_orders.term_months MONTH) AS date_after_duration")
-            )
-            ->whereRaw("DATE_ADD(sales_orders.contract_start_date, INTERVAL sales_orders.term_months MONTH) BETWEEN ? AND ?", [$date1, $date2])
+            ])
+            // ->whereRaw("DATE_ADD(sales_orders.contract_start_date, INTERVAL sales_orders.term_months MONTH) BETWEEN ? AND ?", [$date1, $date2])
+            ->whereRaw("DATE_ADD(sales_orders.contract_start_date, INTERVAL sales_orders.term_months MONTH) >= ? AND sales_orders.contract_start_date <= ?", [$date1, $date2])
             // ->groupBy('date_after_duration')
             ->get();
+
+
+            $modifiedData = [];
+            $allData = [];
+
+            $actual_income = 0;
+            $actual_residual_value = 0;
+            $actual_cost = 0;
+
+            foreach ($purchaseorder as $item) {
+                // $start_date = $date1;
+                $count_month = 0;
+
+                $years_contract = date('Y', strtotime($item->contract_start_date));
+                $years_start = date('Y', strtotime($date1));
+
+                $month_contract = date('m', strtotime($item->contract_start_date));
+                $month_start = date('m', strtotime($date1));
+
+                $ongoing_month = (($years_start - $years_contract) * 12) + ($month_start - $month_contract);
+
+
+                $start = new \DateTime($date1);
+                $end = new \DateTime($date2);
+                $check = new \DateTime($item->date_after_duration);
+
+                $current = clone $start;
+                $current->setDate($start->format('Y'), $start->format('m'), $check->format('d'));
+
+                if ($current < $start) {
+                    $current->modify('+1 month');
+                }
+
+                while ($current <= $end) {
+                    if ($current >= $start && $current <= $end) {
+                        // $nemDate[] = $current->format('Y-m-d');
+                        $count_month++;
+                    }
+
+                    $current->modify('+1 month');
+                }
+
+
+
+                // while ($start_date < $date2) {
+                //     if ($item->date_after_duration > $start_date) {
+                //         // break;
+                //         $count_month++;
+                //     }
+                //     $start_date = date('Y-m-d', strtotime($start_date . ' +1 month'));
+                // }
+
+                // while ($start_date < $date2) {
+                //     if ($item->date_after_duration < $start_date) {
+                //         break;
+                //     }
+                //     $start_date = date('Y-m-d', strtotime($start_date . ' +1 month'));
+                //     $count_month++;
+                // }
+
+                // $ongoing_income = $ongoing_month * $item->monthly_rental;
+
+                // if($count_month > 1) {
+                //     $advance_income = $item->monthly_rental * ($count_month-1);
+                // }else{
+                //     $advance_income = 0;
+                // }
+
+                $advance_income = $item->monthly_rental * ($count_month);
+
+                // $total_income = $ongoing_income + $advance_income;
+                // $actual_income += $total_income; //income from start contarct to range period
+
+                $actual_income += $advance_income; //income from range period
+
+
+                if ( $item->status_next_step == 'Sold' ) {
+                    $actual_residual_value += $item->residual_value;
+                    $residual = $item->residual_value;
+                } else {
+                    $actual_residual_value += 0;
+                    $residual = 0;
+                }
+
+                $subTotal = $item->regular_monthly_payment + $item->vehicle_tracking;
+
+                $cost = ($subTotal * $count_month) + $item->hp_deposit_amount + $item->total_base_interest ?? 0;
+
+                if($item->purchase_method == 'Cash') {
+                    $cost = $cost + $item->price_otr;
+                }
+
+                $actual_cost += $cost;
+
+                $allData []= [
+                    'contract_start_date' => $item->contract_start_date,
+                    'ongoing month' => $ongoing_month,
+                    'range month' => $count_month,
+                    'range start' => $date1,
+                    'range end' => $date2,
+                    'check date' => $item->date_after_duration,
+                    'term_months' => $item->term_months,
+                    'agreement_number' => $item->agreement_number,
+                    'monthly_rental' => $item->monthly_rental,
+                    'regular monthly' => $item->regular_monthly_payment,
+                    'purchase_method' => $item->purchase_method,
+                    'otr' => $item->price_otr,
+                    'hp_deposit_amount' => $item->hp_deposit_amount,
+
+                    'rental' => $advance_income,
+                    'total_cost' => $cost,
+                    'residual' => $residual,
+                    'income' =>  $advance_income + $residual,
+                    'margin' => ($advance_income + $residual) - $cost,
+                    // 'margin percentage' => ($advance_income != 0) ? round((($advance_income + $residual) - $cost) / ($advance_income + $residual) * 100, 2) : 0
+                ];
+
+
+                $total_income = $actual_income + $actual_residual_value;
+                $margin = $total_income -  $actual_income;
+
+                if ($actual_income != 0) {
+                    $profitMargin = ($total_income - $actual_cost) / (($actual_income + $actual_residual_value) * 100);
+                } else {
+                    $profitMargin = 0;
+                }
+
+                $modifiedData= [
+                    'actual_income' => round($actual_income, 2), //rental income period
+                    'actual_cost' => round($actual_cost, 2), // total cost
+                    'total_residual' => round($actual_residual_value,2), //total residual
+                    'total_income' => round($total_income, 2), //total income
+                    'margin' => round($margin, 2), //total margin
+                    'margin_percentage' =>  round($profitMargin,2) // Avoid division by zero
+                ];
+            }
+
 
         if (count($purchaseorder) > 0) {
             return response([
                 'message' => 'Retrieve All Success',
-                'data' => $purchaseorder
+                // 'datafull' => $purchaseorder,
+                // 'all data' => $allData,
+                'data' => $modifiedData
             ], 200);
         }
 
@@ -1144,6 +1267,111 @@ public function bookedStock(Request $request){
             'message' => 'Empty',
             'data' => null
         ], 400);
+    }
+
+    public function showDashboard2($date1, $date2)
+    {
+        $purchaseOrders = DB::table('sales_orders')
+            ->join('purchase_orders', 'sales_orders.id_purchase_order', '=', 'purchase_orders.id')
+            ->leftJoin('vehicle_solds', 'sales_orders.id', '=', 'vehicle_solds.id_sales_order')
+            ->leftJoin('other_incomes', 'purchase_orders.id', '=', 'other_incomes.id_purchase_order')
+            ->leftJoin('other_costs', 'purchase_orders.id', '=', 'other_costs.id_purchase_order')
+            ->select([
+                'sales_orders.*',
+                'purchase_orders.*',
+                'vehicle_solds.*',
+                'other_incomes.*',
+                'other_costs.*',
+                DB::raw('(SELECT SUM(base_interest_details.total_base_interest) FROM base_interest_details WHERE base_interest_details.id_purchase_order = purchase_orders.id) AS total_base_interest'),
+                DB::raw("DATE_ADD(sales_orders.contract_start_date, INTERVAL sales_orders.term_months MONTH) AS date_after_duration")
+            ])
+            ->whereRaw("DATE_ADD(sales_orders.contract_start_date, INTERVAL sales_orders.term_months MONTH) >= ? AND sales_orders.contract_start_date <= ?", [$date1, $date2])
+            ->get();
+
+        if ($purchaseOrders->isEmpty()) {
+            return response(['message' => 'Empty', 'data' => null], 400);
+        }
+
+        $allData = [];
+        // $nemDate = [];
+        $actualIncome = $actualCost = $actualResidualValue = 0;
+
+        foreach ($purchaseOrders as $item) {
+            $start_date = $date1;
+            $ongoingMonths = ((date('Y', strtotime($date1)) - date('Y', strtotime($item->contract_start_date))) * 12)
+                            + (date('m', strtotime($date1)) - date('m', strtotime($item->contract_start_date)));
+
+            $start = new \DateTime($date1);
+            $end = new \DateTime($date2);
+            $check = new \DateTime($item->date_after_duration);
+
+            $countMonth = 0;
+            $current = clone $start;
+            $current->setDate($start->format('Y'), $start->format('m'), $check->format('d'));
+
+            if ($current < $start) {
+                $current->modify('+1 month');
+            }
+
+            while ($current <= $end) {
+                if ($current >= $start && $current <= $end) {
+                    // $nemDate[] = $current->format('Y-m-d');
+                    $countMonth++;
+                }
+
+                $current->modify('+1 month');
+            }
+
+            // $ongoingIncome = $ongoingMonths * $item->monthly_rental;
+            $advanceIncome = $countMonth * $item->monthly_rental;
+            // $totalIncome = $ongoingIncome + $advanceIncome;
+            $actualIncome += $advanceIncome;
+
+            $residual = ($item->status_next_step == 'Sold') ? $item->residual_value : 0;
+            $actualResidualValue += $residual;
+
+            $subTotal = $item->regular_monthly_payment + $item->vehicle_tracking;
+            $cost = ($subTotal * $countMonth) + $item->hp_deposit_amount + ($item->total_base_interest ?? 0);
+            if ($item->purchase_method == 'Cash') {
+                $cost += $item->price_otr;
+            }
+            $actualCost += $cost;
+
+            $allData[] = [
+                'contract_start_date' => $item->contract_start_date,
+                'end cocntract' => $item->date_after_duration,
+                'term_months' => $item->term_months,
+                // 'nemDate' => $nemDate,
+                'date1' => $date1,
+                'date2' => $date2,
+                'agreement_number' => $item->agreement_number,
+                'monthly_rental' => $item->monthly_rental,
+                'total_income' => $advanceIncome,
+                'total_cost' => $cost,
+                'otr' => $item->price_otr,
+                'sub_total' => $subTotal,
+                'hp_deposit_amount' => $item->hp_deposit_amount,
+                'purchase_method' => $item->purchase_method,
+                'residual_value' => $residual,
+                'ongoing_months' => $ongoingMonths,
+                'count_month' => $countMonth
+            ];
+        }
+
+        $modifiedData = [
+            'actual_income' => round($actualIncome, 2),
+            'actual_cost' => round($actualCost, 2),
+            'total_residual' => round($actualResidualValue, 2),
+            'total_income' => round($actualIncome + $actualResidualValue, 2),
+            'margin' => round(($actualIncome + $actualResidualValue) - $actualCost, 2),
+            'margin_percentage' => ($actualIncome > 0) ? round(($actualIncome - $actualCost) / ($actualIncome * 100), 2) : 0
+        ];
+
+        return response([
+            'message' => 'Retrieve All Success',
+            'all_data' => $allData,
+            'data' => $modifiedData
+        ], 200);
     }
 
     public function countVehicleHired($date1,$date2){
