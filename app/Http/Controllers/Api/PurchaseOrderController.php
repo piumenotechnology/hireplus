@@ -1233,12 +1233,11 @@ public function bookedStock(Request $request){
                     // 'margin percentage' => ($advance_income != 0) ? round((($advance_income + $residual) - $cost) / ($advance_income + $residual) * 100, 2) : 0
                 ];
 
-
                 $total_income = $actual_income + $actual_residual_value;
-                $margin = $total_income -  $actual_income;
+                $margin = $total_income - $actual_cost;
 
                 if ($actual_income != 0) {
-                    $profitMargin = ($total_income - $actual_cost) / (($actual_income + $actual_residual_value) * 100);
+                    $profitMargin = ($margin / $total_income) * 100;
                 } else {
                     $profitMargin = 0;
                 }
@@ -1248,7 +1247,7 @@ public function bookedStock(Request $request){
                     'actual_cost' => round($actual_cost, 2), // total cost
                     'total_residual' => round($actual_residual_value,2), //total residual
                     'total_income' => round($total_income, 2), //total income
-                    'margin' => round($margin, 2), //total margin
+                    'margin' => round($total_income - $actual_cost, 2),
                     'margin_percentage' =>  round($profitMargin,2) // Avoid division by zero
                 ];
             }
