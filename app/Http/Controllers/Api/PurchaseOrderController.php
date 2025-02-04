@@ -1237,8 +1237,6 @@ class PurchaseOrderController extends Controller
 
             $total_cost += $cost;
 
-
-
             $allData[] = [
                 'agreement_number' => $item->agreement_number,
                 'id purcahse' => $item->purchase_id,
