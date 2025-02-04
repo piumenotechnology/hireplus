@@ -32,7 +32,11 @@ Route::put('changeeta/{id}', 'App\Http\Controllers\Api\PurchaseOrderController@c
 Route::get('showcontractbyid/{id}', 'App\Http\Controllers\Api\PurchaseOrderController@showContractById');
 Route::get('showvehiclebyid/{id}', 'App\Http\Controllers\Api\PurchaseOrderController@showVehicleById');
 Route::get('showcostandfunding/{id}', 'App\Http\Controllers\Api\PurchaseOrderController@showCostandFunding');
+
 Route::get('showdashboard/{date1},{date2}', 'App\Http\Controllers\Api\PurchaseOrderController@showDashboard');
+
+Route::get('dashboardactivesales/{date1},{date2}', 'App\Http\Controllers\Api\PurchaseOrderController@dashboardactivesales');
+
 Route::get('countvehiclehired/{date1},{date2}', 'App\Http\Controllers\Api\PurchaseOrderController@countVehicleHired');
 Route::get('countvehiclesold/{date1},{date2}', 'App\Http\Controllers\Api\PurchaseOrderController@countVehicleSold');
 Route::get('laporan/{date1},{date2}', 'App\Http\Controllers\Api\PurchaseOrderController@laporan');
