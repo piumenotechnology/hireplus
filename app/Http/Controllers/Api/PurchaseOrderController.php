@@ -1238,33 +1238,15 @@ class PurchaseOrderController extends Controller
             $total_cost += $cost;
 
             $allData[] = [
+                'vehicle_registration' => $item->vehicle_registration,
                 'agreement_number' => $item->agreement_number,
-                'id purcahse' => $item->purchase_id,
-                'range start' => $date1,
-                'range end' => $date2,
                 'contract_start_date' => $item->contract_start_date,
-                'buy cars date' => $item->hire_purchase_starting_date,
-                'term cars' => $item->hp_term,
-                'date paid' => $datePaid->format('Y-m-d'),
-                'cek data vehicle' => $item->purchase_method,
-                // 'check date' => $item->date_after_duration,
-                // 'ongoing month' => $ongoing_month,
-                // 'range month' => $count_month,
-                // 'monthly_rental' => $item->monthly_rental,
-                // 'regular monthly' => $item->regular_monthly_payment,
-                // 'purchase_method' => $item->purchase_method,
-                // 'otr' => $item->price_otr,
-                // 'hp_deposit_amount' => $item->hp_deposit_amount,
-
-                'status vehicle' => $item->status_next_step,
-                'status sales vehicle' => $item->next_step_status_sales,
-
-                // 'rental' => $monthly_income,
-                // 'total_cost' => $cost,
-                // 'residual' => $residual,
-                // 'income' =>  $monthly_income + $residual,
-                // 'margin' => ($monthly_income + $residual) - $cost,
-                // 'margin percentage' => ($advance_income != 0) ? round((($advance_income + $residual) - $cost) / ($advance_income + $residual) * 100, 2) : 0
+                'hire_purchase_starting_date' => $item->hire_purchase_starting_date,
+                'rental_income' => $monthly_income,
+                'hp_payment' => $subTotal,
+                'margin' => $monthly_income - $subTotal,
+                'status_vehicle' => $item->status_next_step,
+                'status_contract' => $item->next_step_status_sales,
             ];
 
             $total_income = $rental + $total_residual_value;
