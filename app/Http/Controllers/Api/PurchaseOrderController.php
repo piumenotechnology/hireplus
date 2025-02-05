@@ -466,7 +466,7 @@ class PurchaseOrderController extends Controller
         $purchaseorder = DB::table('purchase_orders')
             ->select('purchase_orders.id', 'purchase_orders.vehicle_registration', 'purchase_orders.vehicle_manufactur', 'purchase_orders.vehicle_model', 'purchase_orders.colour', 'purchase_orders.vehicle_variant', 'purchase_orders.min_contract_price_satu', 'purchase_orders.min_contract_price_dua', 'purchase_orders.stock_status', 'purchase_orders.status_next_step', 'purchase_orders.eta')
             // ->whereRaw('status_next_step in ("Available")');
-            ->whereRaw('(stock_status = "Available" OR stock_status IS NULL)')
+            // ->whereRaw('(stock_status = "Available" OR stock_status IS NULL)')
             ->whereRaw('status_next_step = "Available"');
 
         if ($s = $request->input('search')) {
