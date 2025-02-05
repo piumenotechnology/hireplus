@@ -555,6 +555,36 @@ class PurchaseOrderController extends Controller
             'data' => null
         ], 400);
     }
+    public function confirmedStock(Request $request)
+    {
+        $purchaseorder = DB::table('purchase_orders')
+            ->select('purchase_orders.id', 'purchase_orders.vehicle_registration', 'purchase_orders.vehicle_manufactur', 'purchase_orders.vehicle_model', 'purchase_orders.colour', 'purchase_orders.vehicle_variant', 'purchase_orders.min_contract_price_satu', 'purchase_orders.min_contract_price_dua', 'purchase_orders.stock_status', 'purchase_orders.eta')
+            ->whereRaw('stock_status in ("Confirmed Return")');
+
+        if ($s = $request->input('search')) {
+            $purchaseorder->whereRaw("vehicle_registration LIKE '%" . $s . "%'")
+                ->orWhereRaw("vehicle_model LIKE '%" . $s . "%'")
+                ->orWhereRaw("vehicle_manufactur LIKE '%" . $s . "%'");
+        }
+
+        if ($sort = $request->input('sort')) {
+            $purchaseorder->orderBy(request()->sort, $request->input('order'));
+        }
+
+        $result = $purchaseorder->paginate(request()->per_page);
+
+        if (count($result) > 0) {
+            return response([
+                'message' => 'Retrieve All Success',
+                'data' => $result
+            ], 200);
+        }
+
+        return response([
+            'message' => 'Empty',
+            'data' => null
+        ], 400);
+    }
 
     public function changeStockStatus(Request $request, $id)
     {
