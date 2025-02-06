@@ -27,6 +27,7 @@ Route::get('showsalesnumberinvehiclesold', 'App\Http\Controllers\Api\PurchaseOrd
 Route::get('availablestock', 'App\Http\Controllers\Api\PurchaseOrderController@availableStock');
 Route::get('potentialstock', 'App\Http\Controllers\Api\PurchaseOrderController@potentialStock');
 Route::get('bookedstock', 'App\Http\Controllers\Api\PurchaseOrderController@bookedStock');
+Route::get('confirmedstock', 'App\Http\Controllers\Api\PurchaseOrderController@confirmedStock');
 Route::put('changestockstatus/{id}', 'App\Http\Controllers\Api\PurchaseOrderController@changeStockStatus');
 Route::put('changeeta/{id}', 'App\Http\Controllers\Api\PurchaseOrderController@changeEta');
 Route::get('showcontractbyid/{id}', 'App\Http\Controllers\Api\PurchaseOrderController@showContractById');

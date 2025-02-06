@@ -466,7 +466,7 @@ class PurchaseOrderController extends Controller
         $purchaseorder = DB::table('purchase_orders')
             ->select('purchase_orders.id', 'purchase_orders.vehicle_registration', 'purchase_orders.vehicle_manufactur', 'purchase_orders.vehicle_model', 'purchase_orders.colour', 'purchase_orders.vehicle_variant', 'purchase_orders.min_contract_price_satu', 'purchase_orders.min_contract_price_dua', 'purchase_orders.stock_status', 'purchase_orders.status_next_step', 'purchase_orders.eta')
             // ->whereRaw('status_next_step in ("Available")');
-            ->whereRaw('(stock_status = "Available" OR stock_status IS NULL)')
+            // ->whereRaw('(stock_status = "Available" OR stock_status IS NULL)')
             ->whereRaw('status_next_step = "Available"');
 
         if ($s = $request->input('search')) {
@@ -530,6 +530,36 @@ class PurchaseOrderController extends Controller
         $purchaseorder = DB::table('purchase_orders')
             ->select('purchase_orders.id', 'purchase_orders.vehicle_registration', 'purchase_orders.vehicle_manufactur', 'purchase_orders.vehicle_model', 'purchase_orders.colour', 'purchase_orders.vehicle_variant', 'purchase_orders.min_contract_price_satu', 'purchase_orders.min_contract_price_dua', 'purchase_orders.stock_status', 'purchase_orders.eta')
             ->whereRaw('stock_status in ("Booked")');
+
+        if ($s = $request->input('search')) {
+            $purchaseorder->whereRaw("vehicle_registration LIKE '%" . $s . "%'")
+                ->orWhereRaw("vehicle_model LIKE '%" . $s . "%'")
+                ->orWhereRaw("vehicle_manufactur LIKE '%" . $s . "%'");
+        }
+
+        if ($sort = $request->input('sort')) {
+            $purchaseorder->orderBy(request()->sort, $request->input('order'));
+        }
+
+        $result = $purchaseorder->paginate(request()->per_page);
+
+        if (count($result) > 0) {
+            return response([
+                'message' => 'Retrieve All Success',
+                'data' => $result
+            ], 200);
+        }
+
+        return response([
+            'message' => 'Empty',
+            'data' => null
+        ], 400);
+    }
+    public function confirmedStock(Request $request)
+    {
+        $purchaseorder = DB::table('purchase_orders')
+            ->select('purchase_orders.id', 'purchase_orders.vehicle_registration', 'purchase_orders.vehicle_manufactur', 'purchase_orders.vehicle_model', 'purchase_orders.colour', 'purchase_orders.vehicle_variant', 'purchase_orders.min_contract_price_satu', 'purchase_orders.min_contract_price_dua', 'purchase_orders.stock_status', 'purchase_orders.eta')
+            ->whereRaw('stock_status in ("Confirmed Return")');
 
         if ($s = $request->input('search')) {
             $purchaseorder->whereRaw("vehicle_registration LIKE '%" . $s . "%'")
@@ -1134,7 +1164,7 @@ class PurchaseOrderController extends Controller
                           WHERE base_interest_details.id_purchase_order = purchase_orders.id)
                           AS total_base_interest'),
                 DB::raw("DATE_ADD(sales_orders.contract_start_date, INTERVAL sales_orders.term_months MONTH) AS date_after_duration"),
-                DB::raw("DATE_ADD(purchase_orders.hire_purchase_starting_date, INTERVAL purchase_orders.hp_term MONTH) AS date_paid")
+                // DB::raw("DATE_ADD(purchase_orders.hire_purchase_starting_date, INTERVAL purchase_orders.hp_term MONTH) AS date_paid")
             ])
             ->whereRaw("DATE_ADD(sales_orders.contract_start_date, INTERVAL sales_orders.term_months MONTH) >= ? AND sales_orders.contract_start_date <= ?", [$date1, $date2])
             ->get();
@@ -1192,13 +1222,13 @@ class PurchaseOrderController extends Controller
             }
 
 
-            $datePaid = new \DateTime($item->hire_purchase_starting_date);
+            // $datePaid = new \DateTime($item->hire_purchase_starting_date);
 
-            if ($item->hp_term != null) {
-                $datePaid->modify("+{$item->hp_term} months");
-            }
+            // if ($item->hp_term != null) {
+            //     $datePaid->modify("+{$item->hp_term} months");
+            // }
 
-            $datePaid->format('Y-m-d');
+            // $datePaid->format('Y-m-d');
 
             // while ($start_date < $date2) {
             //     if ($item->date_after_duration > $start_date) {
@@ -1238,33 +1268,15 @@ class PurchaseOrderController extends Controller
             $total_cost += $cost;
 
             $allData[] = [
+                'vehicle_registration' => $item->vehicle_registration,
                 'agreement_number' => $item->agreement_number,
-                'id purcahse' => $item->purchase_id,
-                'range start' => $date1,
-                'range end' => $date2,
                 'contract_start_date' => $item->contract_start_date,
-                'buy cars date' => $item->hire_purchase_starting_date,
-                'term cars' => $item->hp_term,
-                'date paid' => $datePaid->format('Y-m-d'),
-                'cek data vehicle' => $item->purchase_method,
-                // 'check date' => $item->date_after_duration,
-                // 'ongoing month' => $ongoing_month,
-                // 'range month' => $count_month,
-                // 'monthly_rental' => $item->monthly_rental,
-                // 'regular monthly' => $item->regular_monthly_payment,
-                // 'purchase_method' => $item->purchase_method,
-                // 'otr' => $item->price_otr,
-                // 'hp_deposit_amount' => $item->hp_deposit_amount,
-
-                'status vehicle' => $item->status_next_step,
-                'status sales vehicle' => $item->next_step_status_sales,
-
-                // 'rental' => $monthly_income,
-                // 'total_cost' => $cost,
-                // 'residual' => $residual,
-                // 'income' =>  $monthly_income + $residual,
-                // 'margin' => ($monthly_income + $residual) - $cost,
-                // 'margin percentage' => ($advance_income != 0) ? round((($advance_income + $residual) - $cost) / ($advance_income + $residual) * 100, 2) : 0
+                'hire_purchase_starting_date' => $item->hire_purchase_starting_date,
+                'rental_income' => $monthly_income,
+                'hp_payment' => $subTotal,
+                'margin' => $monthly_income - $subTotal,
+                'status_vehicle' => $item->status_next_step,
+                'status_contract' => $item->next_step_status_sales,
             ];
 
             $total_income = $rental + $total_residual_value;
