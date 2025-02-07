@@ -102,6 +102,8 @@ class VehicleSoldController extends Controller
         $purchaseorder->status_next_step = 'Sold';
         $purchaseorder->save();
 
+        //should update stock_status ??
+
         $sales_order->next_step_status_sales = 'Sold';
         $sales_order->save();
 

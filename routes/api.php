@@ -93,7 +93,7 @@ Route::get('showvehiclerehiringorder', 'App\Http\Controllers\Api\RehiringControl
 
 // VehicleSold
 Route::get('vehiclesold/{id}', 'App\Http\Controllers\Api\VehicleSoldController@show');
-Route::post('vehiclesold', 'App\Http\Controllers\Api\VehicleSoldController@store');
+Route::post('vehiclesold', 'App\Http\Controllers\Api\VehicleSoldController@store'); //update stock_status to null
 Route::put('vehiclesold/{id}', 'App\Http\Controllers\Api\VehicleSoldController@update');
 Route::delete('vehiclesold/{id}', 'App\Http\Controllers\Api\VehicleSoldController@destroy');
 Route::get('vehiclesold', 'App\Http\Controllers\Api\VehicleSoldController@index');
@@ -156,6 +156,8 @@ Route::get('getuserpermission/{id}', 'App\Http\Controllers\Api\UserPermissionCon
 
 Route::get('getrolepermission/{id}', 'App\Http\Controllers\Api\UserPermissionController@getRolePermissionByslug');
 
+//calculator
+Route::get('calculator', 'App\Http\Controllers\Api\PurchaseOrderController@calculator');
 
 
 // BaseInterestDetail
