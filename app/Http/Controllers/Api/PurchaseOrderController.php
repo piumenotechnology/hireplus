@@ -1357,20 +1357,21 @@ class PurchaseOrderController extends Controller
         ]);
 
         $vehicleType = $request->vehicle_type;
+
         $contractLength = $request->contract_length;
         $annualMileage = $request->annual_mileage;
         $minimumContract = $request->minimum_contract;
         $initialRental = $request->initial_rental;
         $monthlyRental = $request->monthly_rental;
 
-        if ($vehicleType === "used") {
-            $extraMileageRate = 0.07;
-        } else {
-            $extraMileageRate = 0.125;
-        }
+        $mileageRate = ($vehicleType === "used") ? 0.07 : 0.125;
 
-        $extraMileageCost = $annualMileage > 10000 ? ($annualMileage - 10000) * $extraMileageRate : 0;
-        $minimumMonthlyRental = ($minimumContract - $initialRental + $extraMileageCost) / 12;
+        if ($annualMileage <= 10000) {
+            $minimumMonthlyRental = ($minimumContract - $initialRental) / $contractLength;
+        } else {
+            $extraMileageCost = ($annualMileage - 10000) * $mileageRate;
+            $minimumMonthlyRental = (($minimumContract - $initialRental) + $extraMileageCost) / 12;
+        }
 
         $targetMonthlyRental = $minimumMonthlyRental + 33;
         $targetMonthlyRentalAdverse = $minimumMonthlyRental + 55;
@@ -1379,8 +1380,8 @@ class PurchaseOrderController extends Controller
         $contractTotal = ($monthlyRental * 12) + $initialRental;
 
         $dealerCode = 0;
-        if ($contractTotal > $minimumContractTotal) {
-            $dealerCode = 1800 + (($contractTotal - $minimumContractTotal) * 0.5);
+        if($contractTotal > $minimumContractTotal) {
+            $dealerCode = 1800 + (($contractTotal - $minimumContractTotal)*0.5);
         }
 
         return response()->json([
