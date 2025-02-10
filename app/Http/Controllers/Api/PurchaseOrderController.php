@@ -1228,7 +1228,8 @@ class PurchaseOrderController extends Controller
 
             $countDatePaid = 0;
             if ($datePaid >= $start && $item->purchase_method !== "Cash") {
-                while ($currentPaid <= $end && $currentPaid <= $dateCheck && $currentPaid <= $datePaid) {
+                // while ($currentPaid <= $end && $currentPaid <= $dateCheck && $currentPaid <= $datePaid) {
+                while ($currentPaid <= $end && $currentPaid <= $dateCheck) {
                     $countDatePaid++;
                     $currentPaid->modify('+1 month');
                 }
@@ -1257,13 +1258,11 @@ class PurchaseOrderController extends Controller
                 'status_contract' => $item->next_step_status_sales,
                 'status_vehicle' => $item->status_next_step,
                 'contract_end_date' => $item->date_after_duration,
-                // 'hire_purchase_end_date' => $datePaid->format("Y-m-d"),
-                // 'paid' => $countDatePaid > 0 ? false : true,
-                // 'month range' => $countMonth,
-                // 'count total month cost' => $countDatePaid,
-                // 'cost' => $cost,
-                // 'date' => $current->format("Y-m-d"),
-                // 'cur paid' => $currentPaid->format("Y-m-d"),
+                'hire_purchase_end_date' => $datePaid->format("Y-m-d"),
+                'paid' => $countDatePaid > 0 ? false : true,
+                'month range' => $countMonth,
+                'count total month cost' => $countDatePaid,
+                'cost' => $cost
             ];
 
             // Financial calculations
