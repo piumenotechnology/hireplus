@@ -1192,11 +1192,11 @@ class PurchaseOrderController extends Controller
         $count_contracts = 0;
 
         foreach ($salesOrders as $item) {
+
             $start = new \DateTime($date1);
             $end = new \DateTime($date2);
             $dateCheck = new \DateTime($item->date_after_duration);
 
-            // Calculate rental income
             $countMonth = 0;
             $current = clone $start;
             $current->setDate($start->format('Y'), $start->format('m'), $dateCheck->format('d'));
@@ -1205,7 +1205,7 @@ class PurchaseOrderController extends Controller
                 $current->modify('+1 month');
             }
 
-            while ($current <= $end) {
+            while ($current <= $end && $current <= $dateCheck) {
                 $countMonth++;
                 $current->modify('+1 month');
             }
@@ -1228,7 +1228,7 @@ class PurchaseOrderController extends Controller
 
             $countDatePaid = 0;
             if ($datePaid >= $start && $item->purchase_method !== "Cash") {
-                while ($currentPaid <= $end) {
+                while ($currentPaid <= $end && $currentPaid <= $dateCheck && $currentPaid <= $datePaid) {
                     $countDatePaid++;
                     $currentPaid->modify('+1 month');
                 }
@@ -1250,14 +1250,20 @@ class PurchaseOrderController extends Controller
                 'vehicle_registration' => $item->vehicle_registration,
                 'agreement_number' => $item->agreement_number,
                 'hire_purchase_start_date' => $item->hire_purchase_starting_date,
-                'hire_purchase_end_date' => $datePaid->format("Y-m-d"),
                 'contract_start_date' => $item->contract_start_date,
-                'contract_end_date' => $item->date_after_duration,
                 'rental_income' => $monthlyIncome,
                 'hp_payment' => $subTotal,
                 'margin' => $monthlyIncome - $subTotal,
                 'status_contract' => $item->next_step_status_sales,
-                'status_vehicle' => $item->status_next_step
+                'status_vehicle' => $item->status_next_step,
+                'contract_end_date' => $item->date_after_duration,
+                // 'hire_purchase_end_date' => $datePaid->format("Y-m-d"),
+                // 'paid' => $countDatePaid > 0 ? false : true,
+                // 'month range' => $countMonth,
+                // 'count total month cost' => $countDatePaid,
+                // 'cost' => $cost,
+                // 'date' => $current->format("Y-m-d"),
+                // 'cur paid' => $currentPaid->format("Y-m-d"),
             ];
 
             // Financial calculations
