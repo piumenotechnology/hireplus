@@ -1228,8 +1228,8 @@ class PurchaseOrderController extends Controller
 
             $countDatePaid = 0;
             if ($datePaid >= $start && $item->purchase_method !== "Cash") {
-                // while ($currentPaid <= $end && $currentPaid <= $dateCheck && $currentPaid <= $datePaid) {
-                while ($currentPaid <= $end && $currentPaid <= $dateCheck) {
+                // while ($currentPaid <= $end && $currentPaid <= $datePaid && $currentPaid <= $dateCheck) {
+                while ($currentPaid <= $end && $currentPaid <= $datePaid) {
                     $countDatePaid++;
                     $currentPaid->modify('+1 month');
                 }
