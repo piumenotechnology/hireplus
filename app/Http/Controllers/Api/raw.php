@@ -1147,188 +1147,136 @@ class PurchaseOrderController extends Controller
     {
         $salesOrders = DB::table('sales_orders as so')
             ->join('purchase_orders as po', 'so.id_purchase_order', '=', 'po.id')
+            ->leftJoinSub(
+                DB::table('purchase_orders as po_sub')
+                    ->selectRaw('COUNT(*) AS total_available')
+                    ->where('po_sub.status_next_step', 'Available')
+                    ->whereNotExists(function ($query) use ($date1, $date2) {
+                        $query->select(DB::raw(1))
+                            ->from('sales_orders as so_sub')
+                            ->whereRaw('so_sub.id_purchase_order = po_sub.id')
+                            ->whereRaw('DATE_ADD(so_sub.contract_start_date, INTERVAL so_sub.term_months MONTH) >= ?', [$date1])
+                            ->whereRaw('so_sub.contract_start_date <= ?', [$date2]);
+                    }),
+                'total_count',
+                function ($join) {
+                    $join->on(DB::raw('1'), '=', DB::raw('1'));
+                }
+            )
             ->select(
                 'so.*',
-                'po.vehicle_registration',
-                DB::raw("DATE_ADD(so.contract_start_date, INTERVAL so.term_months MONTH) AS date_after_duration_income"),
+                'po.*',
+                'po.id as purchase_id',
+                'total_count.total_available',
+                DB::raw('COALESCE((SELECT SUM(base_interest_details.total_base_interest)
+                    FROM base_interest_details
+                    WHERE base_interest_details.id_purchase_order = po.id), 0)
+                    AS total_base_interest'),
+                DB::raw("DATE_ADD(so.contract_start_date, INTERVAL so.term_months MONTH) AS date_after_duration")
             )
             ->whereRaw('DATE_ADD(so.contract_start_date, INTERVAL so.term_months MONTH) >= ?', [$date1])
             ->whereRaw('so.contract_start_date <= ?', [$date2])
             ->orderBy('po.vehicle_registration', 'ASC')
             ->get();
 
-        $purchaseorder = DB::table('purchase_orders')
-            ->leftJoin('vehicle_solds as vs', 'vs.id_purchase_order', '=', 'purchase_orders.id')
-            ->select(
-                'purchase_orders.*',
-                'vs.*',
-                'purchase_orders.id as purchase_id',
-                DB::raw("DATE_ADD(purchase_orders.hire_purchase_starting_date, INTERVAL COALESCE(purchase_orders.hp_term, 0) MONTH) AS date_after_duration_cost"),
-                DB::raw("(SELECT COUNT(*) FROM purchase_orders WHERE status_next_step = 'Available') AS available_cars_count"),
-                DB::raw('COALESCE((SELECT SUM(base_interest_details.total_base_interest)
-                FROM base_interest_details
-                WHERE base_interest_details.id_purchase_order = purchase_orders.id), 0)
-                AS total_base_interest'),
-            )
-            ->whereRaw('DATE_ADD(purchase_orders.hire_purchase_starting_date, INTERVAL COALESCE(purchase_orders.hp_term, 0) MONTH) >= ?', [$date1])
-            ->whereRaw('purchase_orders.hire_purchase_starting_date <= ?', [$date2])
-            ->orderBy('purchase_orders.id', 'ASC')
-            ->get();
-
         $modifiedData = [];
+        $count_data = [];
         $rentalData = [];
         $leasingData = [];
 
         $total_residual_value = 0;
+        $available_vehicle = 0;
         $count_contracts = 0;
-        $countVehicle = 0;
+        $all_contract = 0;
         $total_cost = 0;
-
         $rental = 0;
-        $forecasting_income = 0;
-        $cars = [];
 
-        $totalMonth_rental = 0;
-        $totalMonth_cost = 0;
-        //count rental
         foreach ($salesOrders as $item) {
             $start = new \DateTime($date1);
             $end = new \DateTime($date2);
+            $dateCheck = new \DateTime($item->date_after_duration);
+
+            $countMonth = 0;
             $current = clone $start;
-            $dateStartContract = new \DateTime($item->contract_start_date);
-            $dateEndContract = new \DateTime($item->date_after_duration_income);
-
-            $originalIncomeDate = (int) $dateEndContract->format('d');
-
-            $current->setDate($start->format('Y'), $start->format('m'), min($originalIncomeDate, $start->format('t')));
+            $originadate = (int) $dateCheck->format('d');
+            $current->setDate($start->format('Y'), $start->format('m'), $dateCheck->format('d'));
+            // $current->setDate($start->format('Y'), $start->format('m'), min($originadate, $start->format('t')));
 
             if ($current <= $start) {
-                $current->modify('first day of next month');
-                $current->setDate($current->format('Y'), $current->format('m'), min($originalIncomeDate, $current->format('t')));//add new
+                $current->modify('+1 month');
+                // $current->setDate($current->format('Y'), $current->format('m'), min($originadate, $current->format('t')));//add new
             }
 
-            if($dateStartContract > $start){
-                $current = $dateStartContract;
+            while ($current <= $end && $current <= $dateCheck) {
+                $countMonth++;
+                $current->modify('+1 month');
+                // $current->setDate($current->format('Y'), $current->format('m'), min($originadate, $current->format('t'))); //add new
             }
 
-            // $date_modif = [];
-            // $check_date_now = $current->format('Y-m-d'); //debuging
-            $countMonth = 0;
-
-            //count income if active contact
-            $monthlyIncome = 0;
-            $cekTotal_income = 0;
-            if ($item->next_step_status_sales === 'Hired') {
-                while ($current <= $end and $current <= $dateEndContract and $current < $dateEndContract) {
-                    // $date_modif[] = $current->format('Y-m-d'); //debuging
-                    $countMonth++;
-                    $current->modify('first day of next month');
-                    $current->setDate($current->format('Y'), $current->format('m'), min($originalIncomeDate, $current->format('t')));
-                }
-                $monthlyIncome = $item->monthly_rental * $countMonth;
-                $count_contracts++;
-                $cekTotal_income = $countMonth ? ($item->monthly_rental * $item->term_months) + ($item->initial_rental + $item->documentation_fees + $item->other_income) : 0;
-            }
-
-            // $totalMonth_rental += $countMonth; //debuging
+            $monthlyIncome = $item->monthly_rental * $countMonth;
             $rental += $monthlyIncome;
 
-            //forcasting margin income
-            $forecasting_income += $cekTotal_income;
+            // Calculate cost
+            $datePaid = new \DateTime($item->hire_purchase_starting_date);
+            if (!empty($item->hp_term)) {
+                $datePaid->modify("+{$item->hp_term} months");
+            }
+
+            $currentPaid = clone $start;
+            $currentPaid->setDate($start->format('Y'), $start->format('m'), $datePaid->format('d'));
+            if ($currentPaid < $start) {
+                $currentPaid->modify('+1 month');
+            }
+
+            $countDatePaid = 0;
+            if ($datePaid >= $start && $item->purchase_method !== "Cash") {
+                // while ($currentPaid <= $end && $currentPaid <= $datePaid && $currentPaid <= $dateCheck) { //use this when end contract was the end of count cost not the range date
+                while ($currentPaid <= $end && $currentPaid <= $datePaid) {  //use when count cost within range date
+                    $countDatePaid++;
+                    $currentPaid->modify('+1 month');
+                }
+            }
+
+            //Calculate total cost
+            $cost = $subTotal = 0;
+            if($countDatePaid > 0) {
+                $subTotal = $item->regular_monthly_payment + $item->vehicle_tracking;
+                $cost = ($subTotal * $countDatePaid) + ($item->total_base_interest ?? 0);
+            }
+            $total_cost += $cost;
+
+            // Residual value calculation
+            $total_residual_value += ($item->status_next_step === 'Sold') ? $item->residual_value : 0;
 
             // Store data
             $rentalData[] = [
                 'vehicle_registration' => $item->vehicle_registration,
                 'agreement_number' => $item->agreement_number,
+                'hire_purchase_start_date' => $item->hire_purchase_starting_date,
+                'hire_purchase_end_date' => $datePaid->format("Y-m-d"),
                 'contract_start_date' => $item->contract_start_date,
-                'contract_end_date' => $item->date_after_duration_income,
+                'contract_end_date' => $item->date_after_duration,
+                'rental_income' => $monthlyIncome,
+                // 'hp_payment' => $subTotal,
+                'margin' => $monthlyIncome - $subTotal,
                 'status_contract' => $item->next_step_status_sales,
-                'count_month_rental' => $countMonth,
-                'monthly_rental' => round($item->monthly_rental, 2),
-                'rental_income' => round($monthlyIncome,2),
-                'income_forcasting' => round($cekTotal_income,2),
-                // 'date' => $date_modif, //debuging
-                // 'cek' => $check_date_now, //debuging
+                'status_vehicle' => $item->status_next_step,
 
-                // 'hp_payment' => round($subTotal,2),
-                // 'month_cost' => $countDatePaid,
-                // 'cost' => round($cost,2)
-                // 'margin' => round($monthlyIncome - $subTotal, 2),
             ];
+
+            // Contract & vehicle counts
+            if ($item->next_step_status_sales === 'Hired') {
+                $count_contracts++;
+            }
+            if ($item->status_next_step === "Available") {
+                $available_vehicle++;
+            }
+
+            $count_data [] = $item->id_purchase_order;
+            $all_contract++;
         }
 
-        //count cost
-        foreach ($purchaseorder as $leasing) {
-            $start = new \DateTime($date1);
-            $end = new \DateTime($date2);
-            $dateStartHire = new \DateTime($leasing->hire_purchase_starting_date);
-            $dateEndHire = new \DateTime($leasing->date_after_duration_cost);
-
-            $currentPaid = clone $start;
-            $originalDay = (int) $dateEndHire->format('d');
-
-            $currentPaid->setDate($start->format('Y'), $start->format('m'), min($originalDay, $start->format('t')));
-
-            if ($currentPaid <= $start) {
-                // $currentPaid->modify('+1 month');
-                $currentPaid->modify('first day of next month');
-                $currentPaid->setDate($currentPaid->format('Y'), $currentPaid->format('m'), min($originalDay, $currentPaid->format('t')));
-            }
-            if($dateStartHire > $start){
-                $currentPaid = $dateStartHire;
-            }
-
-            $countDatePaid = 0;
-            // $date_modif_cost = []; //debuging
-            if ($dateEndHire >= $start and $leasing->purchase_method !== "Cash" and $leasing->status_next_step !== "Sold" ) {
-                while ($currentPaid <= $end && $currentPaid <= $dateEndHire and $currentPaid < $dateEndHire) {
-                    // $date_modif_cost[] = $currentPaid->format('Y-m-d'); //debuging
-                    $countDatePaid++;
-                    $currentPaid->modify('first day of next month');
-                    $currentPaid->setDate($currentPaid->format('Y'), $currentPaid->format('m'), min($originalDay, $currentPaid->format('t')));
-                }
-            }
-
-            $totalMonth_cost += $countDatePaid;
-
-            //Calculate total cost
-            $cost = $subTotal = 0;
-            if($countDatePaid > 0 and $leasing->status_next_step != "Sold" and $leasing->purchase_method !== "Cash" ) {
-                $subTotal = $leasing->regular_monthly_payment + $leasing->vehicle_tracking;
-                $cost = ($subTotal * $countDatePaid) + ($leasing->total_base_interest ?? 0);
-            }
-            $total_cost += $cost;
-
-            // Residual value calculation
-            // $total_residual_value += ($leasing->status_next_step == 'Sold') ? $leasing->residual_value : 0;
-            $data_residual = 0;
-            if ($leasing->status_next_step == 'Sold') {
-                $data_residual = $leasing->residual_value;
-            }
-
-            $total_residual_value += $data_residual;
-
-
-            if($leasing->status_next_step === "Hired"){
-                $countVehicle++;
-            }
-
-            $leasingData [] = [
-                "vehicle number" => $leasing->vehicle_registration,
-                "hire_purchase_start_date" => $leasing->hire_purchase_starting_date,
-                "hire_purchase_end_date" => $leasing->date_after_duration_cost,
-                "purchase_method" => $leasing->purchase_method,
-                "status_vehicle" => $leasing->status_next_step,
-                "sold_date" => $leasing->vehicle_sold_date,
-                "count_month" => $countDatePaid,
-                "regular_monthly_payment" => round($subTotal, 2),
-                "hp_payment" => round($cost, 2),
-                "base_interest" => round($leasing->total_base_interest ?? 0, 2),
-                "residual_value" => round($data_residual, 2),
-                // "date" => $date_modif_cost //debuging
-            ];
-        }
-
+        $uniqueCount = count(array_unique($count_data));
         $total_income = $rental + $total_residual_value;
         $margin = $rental - $total_cost;
         $profitMargin = ($rental !== 0) ? round(($margin / $rental) * 100, 2) : 0;
@@ -1342,20 +1290,18 @@ class PurchaseOrderController extends Controller
             'margin' => round($margin, 2),
             'margin_percentage' => $profitMargin,
             'total_contract' => $count_contracts,
-            'total_vehicle' => $countVehicle + $leasing->available_cars_count,
-            // 'totalMonth_rental' => $totalMonth_rental,
-            // 'totalMonth_cost' => $totalMonth_cost,
-            // 'vehicle_in_cost' => $countVehicle,
+            'total_vehicle' => $count_contracts + $item->total_available + $available_vehicle,
 
-            'forecasting_income' => round($forecasting_income, 2),
-            'avg_forecasting_income' => round($count_contracts ? ($forecasting_income / $count_contracts) : $forecasting_income, 2),
+            'total_all_contract' => $all_contract,
+            'total_unique_vehicle' => $uniqueCount,
+            'avaliable_vehicle' => $item->total_available + $available_vehicle,
+            'total_real_vehicle' => $uniqueCount + $item->total_available + $available_vehicle,
         ];
 
         if (count($salesOrders) > 0) {
             return response([
                 'message' => 'Retrieve All Success',
-                'data_rental' => $rentalData,
-                'data_leasing' => $leasingData,
+                'all data' => $rentalData,
                 'data' => $modifiedData
             ], 200);
         }
@@ -1462,470 +1408,616 @@ class PurchaseOrderController extends Controller
         ], 200);
     }
 
-    // public function editshowDashboard($date1, $date2)
-    // {
-        //     $salesOrders = DB::table('sales_orders as so')
-        //         ->join('purchase_orders as po', 'so.id_purchase_order', '=', 'po.id')
-        //         ->leftJoinSub(
-        //             DB::table('purchase_orders as po_sub')
-        //                 ->selectRaw('COUNT(*) AS total_available')
-        //                 ->where('po_sub.status_next_step', 'Available')
-        //                 ->whereNotExists(function ($query) use ($date1, $date2) {
-        //                     $query->select(DB::raw(1))
-        //                         ->from('sales_orders as so_sub')
-        //                         ->whereRaw('so_sub.id_purchase_order = po_sub.id')
-        //                         ->whereRaw('DATE_ADD(so_sub.contract_start_date, INTERVAL so_sub.term_months MONTH) >= ?', [$date1])
-        //                         ->whereRaw('so_sub.contract_start_date <= ?', [$date2]);
-        //                 }),
-        //             'total_count',
-        //             function ($join) {
-        //                 $join->on(DB::raw('1'), '=', DB::raw('1')); // Ensures the count applies globally
-        //             }
-        //         )
-        //         ->select(
-        //             'so.*',
-        //             'po.*',
-        //             'po.id as purchase_id',
-        //             'total_count.total_available',
-        //             DB::raw('COALESCE((SELECT SUM(base_interest_details.total_base_interest)
-        //                 FROM base_interest_details
-        //                 WHERE base_interest_details.id_purchase_order = po.id), 0)
-        //                 AS total_base_interest'),
-        //             DB::raw("DATE_ADD(so.contract_start_date, INTERVAL so.term_months MONTH) AS date_after_duration"),
-        //         )
-        //         ->whereRaw('DATE_ADD(so.contract_start_date, INTERVAL so.term_months MONTH) >= ?', [$date1])
-        //         ->whereRaw('so.contract_start_date <= ?', [$date2])
-        //         ->orderBy('po.vehicle_registration', 'ASC')
-        //         ->get();
+
+    public function editshowDashboard($date1, $date2)
+    {
+        $purchaseorder = DB::table('purchase_orders')
+            ->select(
+                '*',
+                DB::raw("DATE_ADD(purchase_orders.hire_purchase_starting_date, INTERVAL COALESCE(purchase_orders.hp_term, 0) MONTH) AS date_after_duration")
+            )
+            ->whereRaw('DATE_ADD(purchase_orders.hire_purchase_starting_date, INTERVAL COALESCE(purchase_orders.hp_term, 0) MONTH) >= ?', [$date1])
+            ->whereRaw('purchase_orders.hire_purchase_starting_date <= ?', [$date2])
+            ->get();
 
 
-        //     $modifiedData = [];
-        //     $allData = [];
+        $modifiedData = [];
+        $count_data = [];
+        $data_cost = [] ;
 
-        //     $rental = 0;
-        //     $total_residual_value = 0;
-        //     $total_cost = 0;
-        //     $available_vehicle = 0;
-        //     $count_contracts = 0;
+        $total_residual_value = 0;
+        $available_vehicle = 0;
+        $count_contracts = 0;
+        $all_contract = 0;
+        $total_cost = 0;
+        $rental = 0;
 
-        //     foreach ($salesOrders as $item) {
-        //         $start = new \DateTime($date1);
-        //         $end = new \DateTime($date2);
-        //         $dateCheck = new \DateTime($item->date_after_duration);
+        //count cost in range date
+        foreach ($purchaseorder as $leasing) {
 
-        //         $countMonth = 0;
-        //         $current = clone $start;
+            $start = new \DateTime($date1);
+            $end = new \DateTime($date2);
+            $datePaid = new \DateTime($leasing->hire_purchase_starting_date);
 
-        //         $current->setDate($start->format('Y'), $start->format('m'), $dateCheck->format('d'));
+            if (!empty($leasing->hp_term)) {
+                $datePaid->modify("+{$leasing->hp_term} months");
+            }
 
-        //         if ($current <= $start) {
-        //             $current->modify('+1 month');
-        //         }
+            $currentPaid = clone $start;
+            $originalDay = (int) $datePaid->format('d');
 
-        //         $array_date = [];
-        //         while ($current <= $end && $current <= $dateCheck) {
-        //             $array_date[] = $current->format('Y-m-d');
-        //             $countMonth++;
-        //             $current->modify('+1 month');
-        //         }
+            $currentPaid->setDate($start->format('Y'), $start->format('m'), min($originalDay, $start->format('t')));
 
-        //         $monthlyIncome = $item->monthly_rental * $countMonth;
-        //         $rental += $monthlyIncome;
+            if ($currentPaid < $start) {
+                $currentPaid->modify('+1 month');
+                $currentPaid->setDate($currentPaid->format('Y'), $currentPaid->format('m'), min($originalDay, $currentPaid->format('t')));
+            }
 
-        //         // Calculate cost
-        //         $datePaid = new \DateTime($item->hire_purchase_starting_date);
-        //         if (!empty($item->hp_term)) {
-        //             $datePaid->modify("+{$item->hp_term} months");
-        //         }
+            $countDatePaid = 0;
+            if ($datePaid >= $start && $leasing->purchase_method !== "Cash") {
+                while ($currentPaid <= $end && $currentPaid <= $datePaid) {
+                    $countDatePaid++;
 
-        //         $currentPaid = clone $start;
-        //         $currentPaid->setDate($start->format('Y'), $start->format('m'), $datePaid->format('d'));
+                    // Move to next month safely
+                    $currentPaid->modify('first day of next month');
+                    $currentPaid->setDate($currentPaid->format('Y'), $currentPaid->format('m'), min($originalDay, $currentPaid->format('t')));
+                }
+            }
 
-        //         if ($currentPaid < $start) {
-        //             $currentPaid->modify('+1 month');
-        //         }
+            //Calculate total cost
+            $cost = $subTotal = 0;
+            if($countDatePaid > 0) {
+                $subTotal = $leasing->regular_monthly_payment + $leasing->vehicle_tracking;
+                $cost = ($subTotal * $countDatePaid) + ($item->total_base_interest ?? 0);
+            }
+            $total_cost += $cost;
 
-        //         $countDatePaid = 0;
-        //         if ($datePaid >= $start && $item->purchase_method !== "Cash") {
-        //             while ($currentPaid <= $end && $currentPaid <= $datePaid) {
-        //                 $countDatePaid++;
-        //                 $currentPaid->modify('+1 month');
-        //             }
-        //         }
+            // Residual value calculation
+            $total_residual_value += ($leasing->status_next_step === 'Sold') ? $leasing->residual_value : 0;
 
-        //         //Calculate total cost
-        //         $cost = $subTotal = 0;
-        //         if($countDatePaid > 0) {
-        //             $subTotal = $item->regular_monthly_payment + $item->vehicle_tracking;
-        //             $cost = ($subTotal * $countDatePaid) + ($item->total_base_interest ?? 0);
-        //         }
-        //         $total_cost += $cost;
+            $data_cost [] = [
+                "vehicle number" => $leasing->vehicle_registration,
+                "hire date" => $leasing->hire_purchase_starting_date,
+                "term month" => $leasing->hp_term,
+                "end hire" => $datePaid->format("Y-m-d"),
+                "status hire" => $leasing->purchase_method,
+                "monthly cost" => $subTotal,
+                "total month" => $countDatePaid,
+                "Cost" => $cost,
 
-        //         // Residual value calculation
-        //         $total_residual_value += ($item->status_next_step === 'Sold') ? $item->residual_value : 0;
+            ];
+        }
 
-        //         // Store data
-        //         $allData[] = [
-        //             'vehicle_registration' => $item->vehicle_registration,
-        //             'agreement_number' => $item->agreement_number,
-        //             'hire_purchase_start_date' => $item->hire_purchase_starting_date,
-        //             'hire_purchase_end_date' => $datePaid->format("Y-m-d"),
-        //             'contract_start_date' => $item->contract_start_date,
-        //             'contract_end_date' => $item->date_after_duration,
-        //             'rental_income' => $monthlyIncome,
-        //             'hp_payment' => $subTotal,
-        //             // 'margin' => $monthlyIncome - $subTotal,
-        //             'status_contract' => $item->next_step_status_sales,
-        //             'status_vehicle' => $item->status_next_step,
-        //             // 'paid' => $countDatePaid > 0 ? false : true,
-        //             'month rental' => $countMonth,
-        //             'month leasing' => $countDatePaid,
-        //             // 'cost' => $cost,
-        //             // 'date' => $array_date
-        //         ];
+        // Final structured data
+        $modifiedData = [
+            'actual_cost' => round($total_cost, 2),
+            'total_residual' => round($total_residual_value, 2),
+        ];
 
-        //         // Financial calculations
-        //         $total_income = $rental + $total_residual_value;
-        //         $margin = $rental - $total_cost;
-        //         $profitMargin = ($rental !== 0) ? round(($margin / $rental) * 100, 2) : 0;
+        if (count($purchaseorder) > 0) {
+            return response([
+                'message' => 'Retrieve All Success',
+                // 'all data' => $allData,
+                'data' => $modifiedData,
+                'data cost' => $data_cost
+            ], 200);
+        }
 
-        //         // Contract & vehicle counts
-        //         if ($item->next_step_status_sales === 'Hired') {
-        //             $count_contracts++;
-        //         }
+        return response([
+            'message' => 'Empty',
+            'data' => null
+        ], 400);
+    }
 
-        //         if ($item->status_next_step === "Available") {
-        //             $available_vehicle++;
-        //         }
 
-        //         // Final structured data
-        //         $modifiedData = [
-        //             'actual_income' => round($rental, 2),
-        //             'actual_cost' => round($total_cost, 2),
-        //             'total_residual' => round($total_residual_value, 2),
-        //             'total_income' => round($total_income, 2),
-        //             'margin' => round($margin, 2),
-        //             'margin_percentage' => $profitMargin,
-        //             'total_contract' => $count_contracts,
-        //             'total_vehicle' => $count_contracts + $item->total_available + $available_vehicle,
-        //         ];
+    //26 februari old
+    public function showDashboard($date1, $date2)
+    {
+        $salesOrders = DB::table('sales_orders as so')
+            ->join('purchase_orders as po', 'so.id_purchase_order', '=', 'po.id')
+            ->leftJoinSub(
+                DB::table('purchase_orders as po_sub')
+                    ->selectRaw('COUNT(*) AS total_available')
+                    ->where('po_sub.status_next_step', 'Available')
+                    ->whereNotExists(function ($query) use ($date1, $date2) {
+                        $query->select(DB::raw(1))
+                            ->from('sales_orders as so_sub')
+                            ->whereRaw('so_sub.id_purchase_order = po_sub.id')
+                            ->whereRaw('DATE_ADD(so_sub.contract_start_date, INTERVAL so_sub.term_months MONTH) >= ?', [$date1])
+                            ->whereRaw('so_sub.contract_start_date <= ?', [$date2]);
+                    }),
+                'total_count',
+                function ($join) {
+                    $join->on(DB::raw('1'), '=', DB::raw('1'));
+                }
+            )
+            ->select(
+                'so.*',
+                'po.*',
+                'po.id as purchase_id',
+                'total_count.total_available',
+                // DB::raw('((so.monthly_rental * so.term_months) + (so.initial_rental + so.documentation_fees + so.other_income)) as total_income2'),
+                DB::raw('COALESCE((SELECT SUM(base_interest_details.total_base_interest)
+                    FROM base_interest_details
+                    WHERE base_interest_details.id_purchase_order = po.id), 0)
+                    AS total_base_interest'),
+                DB::raw("DATE_ADD(so.contract_start_date, INTERVAL so.term_months MONTH) AS date_after_duration"),
+                DB::raw("DATE_ADD(po.hire_purchase_starting_date, INTERVAL COALESCE(po.hp_term, 0) MONTH) AS date_after_duration_cost")
+            )
+            ->whereRaw('DATE_ADD(so.contract_start_date, INTERVAL so.term_months MONTH) >= ?', [$date1])
+            ->whereRaw('so.contract_start_date <= ?', [$date2])
+            ->orderBy('po.vehicle_registration', 'ASC')
+            ->get();
+
+        $purchaseorder = DB::table('purchase_orders')
+            ->leftJoinSub(
+                DB::table('purchase_orders as po_sub')
+                    ->selectRaw('COUNT(*) AS total_available')
+                    ->where('po_sub.status_next_step', 'Available')
+                    ->whereNotExists(function ($query) use ($date1, $date2) {
+                        $query->select(DB::raw(1))
+                            ->from('purchase_orders as so_sub')
+                            // ->whereRaw('so_sub.id_purchase_order = po_sub.id')
+                            ->whereRaw('DATE_ADD(so_sub.hire_purchase_starting_date, INTERVAL so_sub.hp_term MONTH) >= ?', [$date1])
+                            ->whereRaw('so_sub.hire_purchase_starting_date <= ?', [$date2]);
+                    }),
+                'total_count',
+                function ($join) {
+                    $join->on(DB::raw('1'), '=', DB::raw('1'));
+                }
+            )
+            ->leftJoin('vehicle_solds as vs', 'vs.id_purchase_order', '=', 'purchase_orders.id')
+            ->select(
+                '*',
+                'purchase_orders.id as purchase_id',
+                'total_count.total_available',
+                DB::raw("DATE_ADD(purchase_orders.hire_purchase_starting_date, INTERVAL COALESCE(purchase_orders.hp_term, 0) MONTH) AS date_after_duration")
+            )
+            ->whereRaw('DATE_ADD(purchase_orders.hire_purchase_starting_date, INTERVAL COALESCE(purchase_orders.hp_term, 0) MONTH) >= ?', [$date1])
+            ->whereRaw('purchase_orders.hire_purchase_starting_date <= ?', [$date2])
+            ->orderBy('purchase_orders.id', 'ASC')
+            ->get();
+
+        $modifiedData = [];
+        $rentalData = [];
+        $leasingData = [];
+
+
+        $total_residual_value = 0;
+        $count_contracts = 0;
+        $countVehicle = 0;
+        $total_cost = 0;
+        $total_cost2 = 0;
+        $rental = 0;
+        $forecasting_income = 0;
+
+        $cars = [];
+        //count rental
+        foreach ($salesOrders as $item) {
+            $start = new \DateTime($date1);
+            $end = new \DateTime($date2);
+            $current = clone $start;
+            $dateCheck = new \DateTime($item->date_after_duration);
+            $originadate = (int) $dateCheck->format('d');
+
+            $current->setDate($start->format('Y'), $start->format('m'), min($originadate, $start->format('t')));
+
+            if ($current <= $start) {
+                $current->modify('first day of next month');
+                $current->setDate($current->format('Y'), $current->format('m'), min($originadate, $current->format('t')));//add new
+            }
+
+            // $date_modif = [];
+            // $check_date_now = $current->format('Y-m-d');
+            $countMonth = 0;
+            while ($current <= $end && $current <= $dateCheck) {
+                // $date_modif[] = $current->format('Y-m-d'); //debuging
+                $countMonth++;
+                $current->modify('first day of next month');
+                $current->setDate($current->format('Y'), $current->format('m'), min($originadate, $current->format('t')));
+            }
+
+            //case all contract active and inactive
+            // $monthlyIncome = $item->monthly_rental * $countMonth;
+            // $rental += $monthlyIncome;
+
+            //income
+            $monthlyIncome = 0;
+            if ($item->next_step_status_sales === 'Hired') {
+                $monthlyIncome = $item->monthly_rental * $countMonth;
+                $count_contracts++;
+            }
+
+            $rental += $monthlyIncome;
+
+        //count cost
+            // $currentPaid = clone $start;
+            // $datePaid = new \DateTime($item->hire_purchase_starting_date);
+
+            // if (!empty($item->hp_term)) {
+            //     $datePaid->modify("+{$item->hp_term} months");
+            // }
+
+            // $originalDay = (int) $datePaid->format('d');
+
+            // $currentPaid->setDate($start->format('Y'), $start->format('m'), min($originalDay, $start->format('t')));
+
+            // if ($currentPaid <= $start) {
+            //     $currentPaid->modify('first day of next month');
+            //     $currentPaid->setDate($currentPaid->format('Y'), $currentPaid->format('m'), min($originalDay, $currentPaid->format('t')));
+            // }
+
+            // $countDatePaid = 0;
+            // if ($datePaid >= $start and $item->purchase_method !== "Cash" and  $item->status_next_step != "Sold" and $item->next_step_status_sales == "Hired") {
+            //     while ($currentPaid <= $end and $currentPaid <= $datePaid) {
+            //         $countDatePaid++;
+            //         $currentPaid->modify('first day of next month');
+            //         $currentPaid->setDate($currentPaid->format('Y'), $currentPaid->format('m'), min($originalDay, $currentPaid->format('t')));
+            //     }
+            // }
+
+            // //Calculate total cost
+            // $cost = $subTotal = 0;
+            // if($countDatePaid > 0 and $item->status_next_step != "Sold" ) {
+            //     $subTotal = $item->regular_monthly_payment + $item->vehicle_tracking;
+            //     $cost = ($subTotal * $countDatePaid) + ($item->total_base_interest ?? 0);
+            // }
+            // $total_cost2 += $cost;
+
+            // // Residual value calculation
+            // $total_residual_value += ($item->status_next_step === 'Sold') ? $item->residual_value : 0;
+
+            //forcasting margin income
+            $cekTotal_income = ($item->monthly_rental * $item->term_months) + ($item->initial_rental + $item->documentation_fees + $item->other_income);
+            $forecasting_income += $cekTotal_income;
+
+            // $status_cars = 'leased';
+            // if($item->date_after_duration_cost < $date1 or $item->purchase_method == 'Cash' or $item->status_next_step == 'Sold') {
+            //     $status_cars = 'paid';
+            // }
+
+            // $cars[] = [$status_cars, $item->vehicle_registration];
+
+            // Store data
+            $rentalData[] = [
+                'vehicle_registration' => $item->vehicle_registration,
+                'agreement_number' => $item->agreement_number,
+                // 'hire_purchase_start_date' => $item->hire_purchase_starting_date,
+                'hire_purchase_end_date' => $item->date_after_duration_cost,
+                // 'contract_start_date' => $item->contract_start_date,
+                'contract_end_date' => $item->date_after_duration,
+                'status_contract' => $item->next_step_status_sales,
+                'status_vehicle' => $item->status_next_step,
+                // 'status_cars' => $status_cars,
+                'purchase_method' => $item->purchase_method,
+                'count_month_rental' => $countMonth,
+                'monthly_rental' => round($item->monthly_rental, 2),
+                'rental_income' => round($monthlyIncome,2),
+
+                // 'hp_payment' => round($subTotal,2),
+                // 'month_cost' => $countDatePaid,
+                // 'cost' => round($cost,2)
+                // 'margin' => round($monthlyIncome - $subTotal, 2),
+            ];
+        }
+
+        //count cost
+        foreach ($purchaseorder as $leasing) {
+            $start = new \DateTime($date1);
+            $end = new \DateTime($date2);
+            $datePaid = new \DateTime($leasing->hire_purchase_starting_date);
+
+            if (!empty($leasing->hp_term)) {
+                $datePaid->modify("+{$leasing->hp_term} months");
+            }
+
+            $currentPaid = clone $start;
+            $originalDay = (int) $datePaid->format('d');
+
+            $currentPaid->setDate($start->format('Y'), $start->format('m'), min($originalDay, $start->format('t')));
+
+            if ($currentPaid <= $start) {
+                // $currentPaid->modify('+1 month');
+                $currentPaid->modify('first day of next month');
+                $currentPaid->setDate($currentPaid->format('Y'), $currentPaid->format('m'), min($originalDay, $currentPaid->format('t')));
+            }
+
+            $countDatePaid = 0;
+            if ($datePaid >= $start and $leasing->purchase_method !== "Cash" and $leasing->status_next_step !== "Sold") {
+                while ($currentPaid <= $end && $currentPaid <= $datePaid) {
+                    $countDatePaid++;
+                    $currentPaid->modify('first day of next month');
+                    $currentPaid->setDate($currentPaid->format('Y'), $currentPaid->format('m'), min($originalDay, $currentPaid->format('t')));
+                }
+            }
+
+            //Calculate total cost
+            $cost = $subTotal = 0;
+            if($countDatePaid > 0 and $leasing->status_next_step != "Sold" and $leasing->purchase_method !== "Cash" ) {
+                $subTotal = $leasing->regular_monthly_payment + $leasing->vehicle_tracking;
+                $cost = ($subTotal * $countDatePaid) + ($item->total_base_interest ?? 0);
+            }
+            $total_cost += $cost;
+
+            // Residual value calculation
+            $total_residual_value += ($leasing->status_next_step === 'Sold') ? $leasing->residual_value : 0;
+
+            if($leasing->status_next_step === "Hired"){
+                $countVehicle++;
+            }
+
+            $leasingData [] = [
+                "id" => $leasing->purchase_id,
+                "vehicle number" => $leasing->vehicle_registration,
+                "hire_purchase_start_date" => $leasing->hire_purchase_starting_date,
+                "hire_purchase_end_date" => $datePaid->format("Y-m-d"),
+                "status_hire" => $leasing->purchase_method,
+                // "sold_date" => $leasing->vehicle_sold_date,
+                "status_vehicle" => $leasing->status_next_step,
+                "purchase_method" => $leasing->purchase_method,
+                // "term month" => $leasing->hp_term,
+                "count_month" => $countDatePaid,
+                // "monthly" => round($subTotal,2),
+                "hp_payment" => round($subTotal, 2),
+            ];
+        }
+
+        $total_income = $rental + $total_residual_value;
+        $margin = $rental - $total_cost;
+        $profitMargin = ($rental !== 0) ? round(($margin / $rental) * 100, 2) : 0;
+
+        // $uniqueSoldCars = [];
+        // foreach ($cars as $car) {
+        //     if ($car[0] === 'leased' && !isset($uniqueSoldCars[$car[1]])) {
+        //         $uniqueSoldCars[$car[1]] = $car;
         //     }
-
-        //     if (count($salesOrders) > 0) {
-        //         return response([
-        //             'message' => 'Retrieve All Success',
-        //             'all data' => $allData,
-        //             'data' => $modifiedData
-        //         ], 200);
-        //     }
-
-        //     return response([
-        //         'message' => 'Empty',
-        //         'data' => null
-        //     ], 400);
         // }
 
-    // public function editshowDashboard($date1, $date2)
-    //     {
-    //     $salesOrders = DB::table('sales_orders as so')
-    //         ->join('purchase_orders as po', 'so.id_purchase_order', '=', 'po.id')
-    //         ->leftJoinSub(
-    //             DB::table('purchase_orders as po_sub')
-    //                 ->selectRaw('COUNT(*) AS total_available')
-    //                 ->where('po_sub.status_next_step', 'Available')
-    //                 ->whereNotExists(function ($query) use ($date1, $date2) {
-    //                     $query->select(DB::raw(1))
-    //                         ->from('sales_orders as so_sub')
-    //                         ->whereRaw('so_sub.id_purchase_order = po_sub.id')
-    //                         ->whereRaw('DATE_ADD(so_sub.contract_start_date, INTERVAL so_sub.term_months MONTH) >= ?', [$date1])
-    //                         ->whereRaw('so_sub.contract_start_date <= ?', [$date2]);
-    //                 }),
-    //             'total_count',
-    //             function ($join) {
-    //                 $join->on(DB::raw('1'), '=', DB::raw('1'));
-    //             }
-    //         )
-    //         ->select(
-    //             'so.*',
-    //             'po.*',
-    //             'po.id as purchase_id',
-    //             'total_count.total_available',
-    //             // DB::raw('((so.monthly_rental * so.term_months) + (so.initial_rental + so.documentation_fees + so.other_income)) as total_income2'),
-    //             DB::raw('COALESCE((SELECT SUM(base_interest_details.total_base_interest)
-    //                 FROM base_interest_details
-    //                 WHERE base_interest_details.id_purchase_order = po.id), 0)
-    //                 AS total_base_interest'),
-    //             DB::raw("DATE_ADD(so.contract_start_date, INTERVAL so.term_months MONTH) AS date_after_duration"),
-    //             DB::raw("DATE_ADD(po.hire_purchase_starting_date, INTERVAL COALESCE(po.hp_term, 0) MONTH) AS date_after_duration_cost")
-    //         )
-    //         ->whereRaw('DATE_ADD(so.contract_start_date, INTERVAL so.term_months MONTH) >= ?', [$date1])
-    //         ->whereRaw('so.contract_start_date <= ?', [$date2])
-    //         ->orderBy('po.vehicle_registration', 'ASC')
-    //         ->get();
+        // Convert associative array back to indexed array
+        // $uniqueSoldCount = count($uniqueSoldCars);
 
-    //     $purchaseorder = DB::table('purchase_orders')
-    //         ->leftJoinSub(
-    //             DB::table('purchase_orders as po_sub')
-    //                 ->selectRaw('COUNT(*) AS total_available')
-    //                 ->where('po_sub.status_next_step', 'Available')
-    //                 ->whereNotExists(function ($query) use ($date1, $date2) {
-    //                     $query->select(DB::raw(1))
-    //                         ->from('purchase_orders as so_sub')
-    //                         // ->whereRaw('so_sub.id_purchase_order = po_sub.id')
-    //                         ->whereRaw('DATE_ADD(so_sub.hire_purchase_starting_date, INTERVAL so_sub.hp_term MONTH) >= ?', [$date1])
-    //                         ->whereRaw('so_sub.hire_purchase_starting_date <= ?', [$date2]);
-    //                 }),
-    //             'total_count',
-    //             function ($join) {
-    //                 $join->on(DB::raw('1'), '=', DB::raw('1'));
-    //             }
-    //         )
-    //         ->leftJoin('vehicle_solds as vs', 'vs.id_purchase_order', '=', 'purchase_orders.id')
-    //         ->select(
-    //             '*',
-    //             'purchase_orders.id as purchase_id',
-    //             'total_count.total_available',
-    //             DB::raw("DATE_ADD(purchase_orders.hire_purchase_starting_date, INTERVAL COALESCE(purchase_orders.hp_term, 0) MONTH) AS date_after_duration")
-    //         )
-    //         ->whereRaw('DATE_ADD(purchase_orders.hire_purchase_starting_date, INTERVAL COALESCE(purchase_orders.hp_term, 0) MONTH) >= ?', [$date1])
-    //         ->whereRaw('purchase_orders.hire_purchase_starting_date <= ?', [$date2])
-    //         ->orderBy('purchase_orders.id', 'ASC')
-    //         ->get();
+        // Final structured data
+        $modifiedData = [
+            'actual_income' => round($rental, 2),
+            'actual_cost' => round($total_cost, 2),
+            'total_residual' => round($total_residual_value, 2),
+            'total_income' => round($total_income, 2),
+            'margin' => round($margin, 2),
+            'margin_percentage' => $profitMargin,
+            'total_contract' => $count_contracts,
+            'total_vehicle' => $countVehicle + $item->total_available,
+            'vehicle_in_cost' => $countVehicle,            // 'total_vehicle_available' => $leasing->total_availab
+            // 'total_vehicle_paid' => $uniqueSoldCount,
+            'forecasting_income' => round($count_contracts ? ($forecasting_income / $count_contracts) : $forecasting_income, 2),
+        ];
 
-    //     $modifiedData = [];
-    //     $rentalData = [];
-    //     $leasingData = [];
+        if (count($salesOrders) > 0) {
+            return response([
+                'message' => 'Retrieve All Success',
+                'data_rental' => $rentalData,
+                'data_leasing' => $leasingData,
+                'data' => $modifiedData
+            ], 200);
+        }
 
+        return response([
+            'message' => 'Empty',
+            'data' => null
+        ], 400);
+    }
 
-    //     $total_residual_value = 0;
-    //     $count_contracts = 0;
-    //     $countVehicle = 0;
-    //     $total_cost = 0;
-    //     $total_cost2 = 0;
-    //     $rental = 0;
-    //     $forecasting_income = 0;
+    //26 februari new
+    public function showDashboard($date1, $date2)
+    {
+        $salesOrders = DB::table('sales_orders as so')
+            ->join('purchase_orders as po', 'so.id_purchase_order', '=', 'po.id')
+            ->select(
+                'so.*',
+                'po.vehicle_registration',
+                DB::raw("DATE_ADD(so.contract_start_date, INTERVAL so.term_months MONTH) AS date_after_duration_income"),
+            )
+            ->whereRaw('DATE_ADD(so.contract_start_date, INTERVAL so.term_months MONTH) >= ?', [$date1])
+            ->whereRaw('so.contract_start_date <= ?', [$date2])
+            ->get();
 
-    //     $totalMonth_rental = 0;
-    //     $totalMonth_cost = 0;
+        $purchaseorder = DB::table('purchase_orders')
+            ->leftJoin('vehicle_solds as vs', 'vs.id_purchase_order', '=', 'purchase_orders.id')
+            ->select(
+                'purchase_orders.*',
+                'purchase_orders.id as purchase_id',
+                DB::raw("DATE_ADD(purchase_orders.hire_purchase_starting_date, INTERVAL COALESCE(purchase_orders.hp_term, 0) MONTH) AS date_after_duration_cost"),
+                DB::raw("(SELECT COUNT(*) FROM purchase_orders WHERE status_next_step = 'Available') AS available_cars_count")
+            )
+            ->whereRaw('DATE_ADD(purchase_orders.hire_purchase_starting_date, INTERVAL COALESCE(purchase_orders.hp_term, 0) MONTH) >= ?', [$date1])
+            ->whereRaw('purchase_orders.hire_purchase_starting_date <= ?', [$date2])
+            ->orderBy('purchase_orders.id', 'ASC')
+            ->get();
 
-    //     $cars = [];
-    //     //count rental
-    //     foreach ($salesOrders as $item) {
-    //         $start = new \DateTime($date1);
-    //         $end = new \DateTime($date2);
-    //         $current = clone $start;
-    //         $dateCheck = new \DateTime($item->date_after_duration);
-    //         $originadate = (int) $dateCheck->format('d');
+        $modifiedData = [];
+        $rentalData = [];
+        $leasingData = [];
 
-    //         $current->setDate($start->format('Y'), $start->format('m'), min($originadate, $start->format('t')));
+        $total_residual_value = 0;
+        $count_contracts = 0;
+        $countVehicle = 0;
+        $total_cost = 0;
 
-    //         if ($current <= $start) {
-    //             $current->modify('first day of next month');
-    //             $current->setDate($current->format('Y'), $current->format('m'), min($originadate, $current->format('t')));//add new
-    //         }
+        $rental = 0;
+        $forecasting_income = 0;
+        $cars = [];
 
-    //         // $date_modif = [];
-    //         // $check_date_now = $current->format('Y-m-d');
-    //         $countMonth = 0;
-    //         while ($current <= $end && $current <= $dateCheck) {
-    //             // $date_modif[] = $current->format('Y-m-d'); //debuging
-    //             $countMonth++;
-    //             $current->modify('first day of next month');
-    //             $current->setDate($current->format('Y'), $current->format('m'), min($originadate, $current->format('t')));
-    //         }
+        //count rental
+        foreach ($salesOrders as $item) {
+            $start = new \DateTime($date1);
+            $end = new \DateTime($date2);
+            $current = clone $start;
+            $dateEndContract = new \DateTime($item->date_after_duration_income);
 
-    //         //case all contract active and inactive
-    //         // $monthlyIncome = $item->monthly_rental * $countMonth;
-    //         // $rental += $monthlyIncome;
+            $originalIncomeDate = (int) $dateEndContract->format('d');
 
-    //         //income
-    //         $monthlyIncome = 0;
-    //         if ($item->next_step_status_sales === 'Hired') {
-    //             $monthlyIncome = $item->monthly_rental * $countMonth;
-    //             $count_contracts++;
-    //         }
-    //         $totalMonth_rental += $countMonth;
+            $current->setDate($start->format('Y'), $start->format('m'), min($originalIncomeDate, $start->format('t')));
 
-    //         $rental += $monthlyIncome;
+            if ($current <= $start) {
+                $current->modify('first day of next month');
+                $current->setDate($current->format('Y'), $current->format('m'), min($originalIncomeDate, $current->format('t')));//add new
+            }
 
-    //     //count cost
-    //         // $currentPaid = clone $start;
-    //         // $datePaid = new \DateTime($item->hire_purchase_starting_date);
+            // $date_modif = [];
+            // $check_date_now = $current->format('Y-m-d');
+            $countMonth = 0;
+            // while ($current <= $end && $current <= $dateEndContract) {
+            //     // $date_modif[] = $current->format('Y-m-d'); //debuging
+            //     $countMonth++;
+            //     $current->modify('first day of next month');
+            //     $current->setDate($current->format('Y'), $current->format('m'), min($originalIncomeDate, $current->format('t')));
+            // }
 
-    //         // if (!empty($item->hp_term)) {
-    //         //     $datePaid->modify("+{$item->hp_term} months");
-    //         // }
+            //count income if active contact
+            $monthlyIncome = 0;
+            if ($item->next_step_status_sales === 'Hired') {
+                while ($current <= $end && $current <= $dateEndContract) {
+                    // $date_modif[] = $current->format('Y-m-d'); //debuging
+                    $countMonth++;
+                    $current->modify('first day of next month');
+                    $current->setDate($current->format('Y'), $current->format('m'), min($originalIncomeDate, $current->format('t')));
+                }
 
-    //         // $originalDay = (int) $datePaid->format('d');
+                $monthlyIncome = $item->monthly_rental * $countMonth;
+                $count_contracts++;
+            }
 
-    //         // $currentPaid->setDate($start->format('Y'), $start->format('m'), min($originalDay, $start->format('t')));
+            $rental += $monthlyIncome;
 
-    //         // if ($currentPaid <= $start) {
-    //         //     $currentPaid->modify('first day of next month');
-    //         //     $currentPaid->setDate($currentPaid->format('Y'), $currentPaid->format('m'), min($originalDay, $currentPaid->format('t')));
-    //         // }
+            //forcasting margin income
+            $cekTotal_income = ($item->monthly_rental * $item->term_months) + ($item->initial_rental + $item->documentation_fees + $item->other_income);
+            $forecasting_income += $cekTotal_income;
 
-    //         // $countDatePaid = 0;
-    //         // if ($datePaid >= $start and $item->purchase_method !== "Cash" and  $item->status_next_step != "Sold" and $item->next_step_status_sales == "Hired") {
-    //         //     while ($currentPaid <= $end and $currentPaid <= $datePaid) {
-    //         //         $countDatePaid++;
-    //         //         $currentPaid->modify('first day of next month');
-    //         //         $currentPaid->setDate($currentPaid->format('Y'), $currentPaid->format('m'), min($originalDay, $currentPaid->format('t')));
-    //         //     }
-    //         // }
+            // $status_cars = 'leased';
+            // if($item->date_after_duration_cost < $date1 or $item->purchase_method == 'Cash' or $item->status_next_step == 'Sold') {
+            //     $status_cars = 'paid';
+            // }
 
-    //         // //Calculate total cost
-    //         // $cost = $subTotal = 0;
-    //         // if($countDatePaid > 0 and $item->status_next_step != "Sold" ) {
-    //         //     $subTotal = $item->regular_monthly_payment + $item->vehicle_tracking;
-    //         //     $cost = ($subTotal * $countDatePaid) + ($item->total_base_interest ?? 0);
-    //         // }
-    //         // $total_cost2 += $cost;
+            // $cars[] = [$status_cars, $item->vehicle_registration];
 
-    //         // // Residual value calculation
-    //         // $total_residual_value += ($item->status_next_step === 'Sold') ? $item->residual_value : 0;
+            // Store data
+            $rentalData[] = [
+                'vehicle_registration' => $item->vehicle_registration,
+                'agreement_number' => $item->agreement_number,
+                'contract_start_date' => $item->contract_start_date,
+                'contract_end_date' => $item->date_after_duration_income,
+                'status_contract' => $item->next_step_status_sales,
+                'count_month_rental' => $countMonth,
+                'monthly_rental' => round($item->monthly_rental, 2),
+                'rental_income' => round($monthlyIncome,2),
 
-    //         //forcasting margin income
-    //         $cekTotal_income = ($item->monthly_rental * $item->term_months) + ($item->initial_rental + $item->documentation_fees + $item->other_income);
-    //         $forecasting_income += $cekTotal_income;
+                // 'hp_payment' => round($subTotal,2),
+                // 'month_cost' => $countDatePaid,
+                // 'cost' => round($cost,2)
+                // 'margin' => round($monthlyIncome - $subTotal, 2),
+            ];
+        }
 
-    //         // $status_cars = 'leased';
-    //         // if($item->date_after_duration_cost < $date1 or $item->purchase_method == 'Cash' or $item->status_next_step == 'Sold') {
-    //         //     $status_cars = 'paid';
-    //         // }
+        //count cost
+        foreach ($purchaseorder as $leasing) {
+            $start = new \DateTime($date1);
+            $end = new \DateTime($date2);
+            $dateEndHire = new \DateTime($leasing->date_after_duration_cost);
 
-    //         // $cars[] = [$status_cars, $item->vehicle_registration];
+            $currentPaid = clone $start;
+            $originalDay = (int) $dateEndHire->format('d');
 
-    //         // Store data
-    //         $rentalData[] = [
-    //             'vehicle_registration' => $item->vehicle_registration,
-    //             'agreement_number' => $item->agreement_number,
-    //             // 'hire_purchase_start_date' => $item->hire_purchase_starting_date,
-    //             'hire_purchase_end_date' => $item->date_after_duration_cost,
-    //             // 'contract_start_date' => $item->contract_start_date,
-    //             'contract_end_date' => $item->date_after_duration,
-    //             'status_contract' => $item->next_step_status_sales,
-    //             'status_vehicle' => $item->status_next_step,
-    //             // 'status_cars' => $status_cars,
-    //             'purchase_method' => $item->purchase_method,
-    //             'count_month_rental' => $countMonth,
-    //             'monthly_rental' => round($item->monthly_rental, 2),
-    //             'rental_income' => round($monthlyIncome,2),
+            $currentPaid->setDate($start->format('Y'), $start->format('m'), min($originalDay, $start->format('t')));
 
-    //             // 'hp_payment' => round($subTotal,2),
-    //             // 'month_cost' => $countDatePaid,
-    //             // 'cost' => round($cost,2)
-    //             // 'margin' => round($monthlyIncome - $subTotal, 2),
-    //         ];
-    //     }
+            if ($currentPaid <= $start) {
+                // $currentPaid->modify('+1 month');
+                $currentPaid->modify('first day of next month');
+                $currentPaid->setDate($currentPaid->format('Y'), $currentPaid->format('m'), min($originalDay, $currentPaid->format('t')));
+            }
 
-    //     //count cost
-    //     foreach ($purchaseorder as $leasing) {
-    //         $start = new \DateTime($date1);
-    //         $end = new \DateTime($date2);
-    //         $datePaid = new \DateTime($leasing->hire_purchase_starting_date);
+            $countDatePaid = 0;
+            if ($dateEndHire >= $start and $leasing->purchase_method !== "Cash" and $leasing->status_next_step !== "Sold") {
+                while ($currentPaid <= $end && $currentPaid <= $dateEndHire) {
+                    $countDatePaid++;
+                    $currentPaid->modify('first day of next month');
+                    $currentPaid->setDate($currentPaid->format('Y'), $currentPaid->format('m'), min($originalDay, $currentPaid->format('t')));
+                }
+            }
 
-    //         if (!empty($leasing->hp_term)) {
-    //             $datePaid->modify("+{$leasing->hp_term} months");
-    //         }
+            //Calculate total cost
+            $cost = $subTotal = 0;
+            if($countDatePaid > 0 and $leasing->status_next_step != "Sold" and $leasing->purchase_method !== "Cash" ) {
+                $subTotal = $leasing->regular_monthly_payment + $leasing->vehicle_tracking;
+                $cost = ($subTotal * $countDatePaid) + ($item->total_base_interest ?? 0);
+            }
+            $total_cost += $cost;
 
-    //         $currentPaid = clone $start;
-    //         $originalDay = (int) $datePaid->format('d');
+            // Residual value calculation
+            $total_residual_value += ($leasing->status_next_step === 'Sold') ? $leasing->residual_value : 0;
 
-    //         $currentPaid->setDate($start->format('Y'), $start->format('m'), min($originalDay, $start->format('t')));
+            if($leasing->status_next_step === "Hired"){
+                $countVehicle++;
+            }
 
-    //         if ($currentPaid <= $start) {
-    //             // $currentPaid->modify('+1 month');
-    //             $currentPaid->modify('first day of next month');
-    //             $currentPaid->setDate($currentPaid->format('Y'), $currentPaid->format('m'), min($originalDay, $currentPaid->format('t')));
-    //         }
+            $leasingData [] = [
+                "id" => $leasing->purchase_id,
+                "vehicle number" => $leasing->vehicle_registration,
+                "hire_purchase_start_date" => $leasing->hire_purchase_starting_date,
+                "hire_purchase_end_date" => $leasing->date_after_duration_cost,
+                "status_hire" => $leasing->purchase_method,
+                // "sold_date" => $leasing->vehicle_sold_date,
+                "status_vehicle" => $leasing->status_next_step,
+                "purchase_method" => $leasing->purchase_method,
+                // "term month" => $leasing->hp_term,
+                "count_month" => $countDatePaid,
+                // "monthly" => round($subTotal,2),
+                "hp_payment" => round($subTotal, 2),
+            ];
+        }
 
-    //         $countDatePaid = 0;
-    //         if ($datePaid >= $start and $leasing->purchase_method !== "Cash" and $leasing->status_next_step !== "Sold") {
-    //             while ($currentPaid <= $end && $currentPaid <= $datePaid) {
-    //                 $countDatePaid++;
-    //                 $currentPaid->modify('first day of next month');
-    //                 $currentPaid->setDate($currentPaid->format('Y'), $currentPaid->format('m'), min($originalDay, $currentPaid->format('t')));
-    //             }
-    //         }
+        $total_income = $rental + $total_residual_value;
+        $margin = $rental - $total_cost;
+        $profitMargin = ($rental !== 0) ? round(($margin / $rental) * 100, 2) : 0;
 
-    //         $totalMonth_cost += $countDatePaid;
+        // $uniqueSoldCars = [];
+        // foreach ($cars as $car) {
+        //     if ($car[0] === 'leased' && !isset($uniqueSoldCars[$car[1]])) {
+        //         $uniqueSoldCars[$car[1]] = $car;
+        //     }
+        // }
 
-    //         //Calculate total cost
-    //         $cost = $subTotal = 0;
-    //         if($countDatePaid > 0 and $leasing->status_next_step != "Sold" and $leasing->purchase_method !== "Cash" ) {
-    //             $subTotal = $leasing->regular_monthly_payment + $leasing->vehicle_tracking;
-    //             $cost = ($subTotal * $countDatePaid) + ($item->total_base_interest ?? 0);
-    //         }
-    //         $total_cost += $cost;
+        // Convert associative array back to indexed array
+        // $uniqueSoldCount = count($uniqueSoldCars);
 
-    //         // Residual value calculation
-    //         $total_residual_value += ($leasing->status_next_step === 'Sold') ? $leasing->residual_value : 0;
+        // Final structured data
+        $modifiedData = [
+            'actual_income' => round($rental, 2),
+            'actual_cost' => round($total_cost, 2),
+            'total_residual' => round($total_residual_value, 2),
+            'total_income' => round($total_income, 2),
+            'margin' => round($margin, 2),
+            'margin_percentage' => $profitMargin,
+            'total_contract' => $count_contracts,
+            'total_vehicle' => $countVehicle + $leasing->available_cars_count,
+            // 'vehicle_in_cost' => $countVehicle,
 
-    //         if($leasing->status_next_step === "Hired"){
-    //             $countVehicle++;
-    //         }
+            'forecasting_income' => round($count_contracts ? ($forecasting_income / $count_contracts) : $forecasting_income, 2),
+        ];
 
-    //         $leasingData [] = [
-    //             "id" => $leasing->purchase_id,
-    //             "vehicle number" => $leasing->vehicle_registration,
-    //             "hire_purchase_start_date" => $leasing->hire_purchase_starting_date,
-    //             "hire_purchase_end_date" => $datePaid->format("Y-m-d"),
-    //             "status_hire" => $leasing->purchase_method,
-    //             // "sold_date" => $leasing->vehicle_sold_date,
-    //             "status_vehicle" => $leasing->status_next_step,
-    //             "purchase_method" => $leasing->purchase_method,
-    //             // "term month" => $leasing->hp_term,
-    //             "count_month" => $countDatePaid,
-    //             // "monthly" => round($subTotal,2),
-    //             "hp_payment" => round($subTotal, 2),
-    //         ];
-    //     }
+        if (count($salesOrders) > 0) {
+            return response([
+                'message' => 'Retrieve All Success',
+                'data_rental' => $rentalData,
+                'data_leasing' => $leasingData,
+                'data' => $modifiedData
+            ], 200);
+        }
 
-    //     $total_income = $rental + $total_residual_value;
-    //     $margin = $rental - $total_cost;
-    //     $profitMargin = ($rental !== 0) ? round(($margin / $rental) * 100, 2) : 0;
-
-    //     // $uniqueSoldCars = [];
-    //     // foreach ($cars as $car) {
-    //     //     if ($car[0] === 'leased' && !isset($uniqueSoldCars[$car[1]])) {
-    //     //         $uniqueSoldCars[$car[1]] = $car;
-    //     //     }
-    //     // }
-
-    //     // Convert associative array back to indexed array
-    //     // $uniqueSoldCount = count($uniqueSoldCars);
-
-    //     // Final structured data
-    //     $modifiedData = [
-    //         'actual_income' => round($rental, 2),
-    //         'actual_cost' => round($total_cost, 2),
-    //         'total_residual' => round($total_residual_value, 2),
-    //         'total_income' => round($total_income, 2),
-    //         'margin' => round($margin, 2),
-    //         'margin_percentage' => $profitMargin,
-    //         'total_contract' => $count_contracts,
-    //         'total_vehicle' => $countVehicle + $item->total_available,
-    //         'vehicle_in_cost' => $countVehicle,            // 'total_vehicle_available' => $leasing->total_availab
-    //         // 'total_vehicle_paid' => $uniqueSoldCount,
-    //         'totalMonth_rental' => $totalMonth_rental,
-    //         'totalMonth_cost' => $totalMonth_cost,
-    //         'forecasting_income' => round($count_contracts ? ($forecasting_income / $count_contracts) : $forecasting_income, 2),
-    //     ];
-
-    //     if (count($salesOrders) > 0) {
-    //         return response([
-    //             'message' => 'Retrieve All Success',
-    //             'data_rental' => $rentalData,
-    //             'data_leasing' => $leasingData,
-    //             'data' => $modifiedData
-    //         ], 200);
-    //     }
-
-    //     return response([
-    //         'message' => 'Empty',
-    //         'data' => null
-    //     ], 400);
-    // }
+        return response([
+            'message' => 'Empty',
+            'data' => null
+        ], 400);
+    }
 
 }
+
+
