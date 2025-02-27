@@ -1150,9 +1150,9 @@ class PurchaseOrderController extends Controller
             ->select(
                 'so.*',
                 'po.vehicle_registration',
-                DB::raw("DATE_ADD(so.contract_start_date, INTERVAL so.term_months MONTH) AS date_after_duration_income"),
+                DB::raw("DATE_ADD(so.contract_start_date, INTERVAL so.term_months  MONTH) AS date_after_duration_income"),
             )
-            ->whereRaw('DATE_ADD(so.contract_start_date, INTERVAL so.term_months MONTH) >= ?', [$date1])
+            ->whereRaw('DATE_ADD(so.contract_start_date, INTERVAL (so.term_months - 1) MONTH) >= ?', [$date1])
             ->whereRaw('so.contract_start_date <= ?', [$date2])
             ->orderBy('po.vehicle_registration', 'ASC')
             ->get();
@@ -1170,7 +1170,7 @@ class PurchaseOrderController extends Controller
                 WHERE base_interest_details.id_purchase_order = purchase_orders.id), 0)
                 AS total_base_interest'),
             )
-            ->whereRaw('DATE_ADD(purchase_orders.hire_purchase_starting_date, INTERVAL COALESCE(purchase_orders.hp_term, 0) MONTH) >= ?', [$date1])
+            ->whereRaw('DATE_ADD(purchase_orders.hire_purchase_starting_date, INTERVAL COALESCE(purchase_orders.hp_term - 1, 0) MONTH) >= ?', [$date1])
             ->whereRaw('purchase_orders.hire_purchase_starting_date <= ?', [$date2])
             ->orderBy('purchase_orders.id', 'ASC')
             ->get();
@@ -1211,8 +1211,8 @@ class PurchaseOrderController extends Controller
                 $current = $dateStartContract;
             }
 
-            // $date_modif = [];
-            // $check_date_now = $current->format('Y-m-d'); //debuging
+            $date_modif = [];
+            $check_date_now = $current->format('Y-m-d'); //debuging
             $countMonth = 0;
 
             //count income if active contact
@@ -1220,7 +1220,7 @@ class PurchaseOrderController extends Controller
             $cekTotal_income = 0;
             if ($item->next_step_status_sales === 'Hired') {
                 while ($current <= $end and $current <= $dateEndContract and $current < $dateEndContract) {
-                    // $date_modif[] = $current->format('Y-m-d'); //debuging
+                    $date_modif[] = $current->format('Y-m-d'); //debuging
                     $countMonth++;
                     $current->modify('first day of next month');
                     $current->setDate($current->format('Y'), $current->format('m'), min($originalIncomeDate, $current->format('t')));
@@ -1247,8 +1247,8 @@ class PurchaseOrderController extends Controller
                 'monthly_rental' => round($item->monthly_rental, 2),
                 'rental_income' => round($monthlyIncome,2),
                 'income_forcasting' => round($cekTotal_income,2),
-                // 'date' => $date_modif, //debuging
-                // 'cek' => $check_date_now, //debuging
+                'date' => $date_modif, //debuging
+                'cek' => $check_date_now, //debuging
 
                 // 'hp_payment' => round($subTotal,2),
                 // 'month_cost' => $countDatePaid,
@@ -1270,7 +1270,6 @@ class PurchaseOrderController extends Controller
             $currentPaid->setDate($start->format('Y'), $start->format('m'), min($originalDay, $start->format('t')));
 
             if ($currentPaid <= $start) {
-                // $currentPaid->modify('+1 month');
                 $currentPaid->modify('first day of next month');
                 $currentPaid->setDate($currentPaid->format('Y'), $currentPaid->format('m'), min($originalDay, $currentPaid->format('t')));
             }
@@ -1279,10 +1278,10 @@ class PurchaseOrderController extends Controller
             }
 
             $countDatePaid = 0;
-            // $date_modif_cost = []; //debuging
+            $date_modif_cost = []; //debuging
             if ($dateEndHire >= $start and $leasing->purchase_method !== "Cash" and $leasing->status_next_step !== "Sold" ) {
                 while ($currentPaid <= $end && $currentPaid <= $dateEndHire and $currentPaid < $dateEndHire) {
-                    // $date_modif_cost[] = $currentPaid->format('Y-m-d'); //debuging
+                    $date_modif_cost[] = $currentPaid->format('Y-m-d'); //debuging
                     $countDatePaid++;
                     $currentPaid->modify('first day of next month');
                     $currentPaid->setDate($currentPaid->format('Y'), $currentPaid->format('m'), min($originalDay, $currentPaid->format('t')));
@@ -1325,13 +1324,13 @@ class PurchaseOrderController extends Controller
                 "hp_payment" => round($cost, 2),
                 "base_interest" => round($leasing->total_base_interest ?? 0, 2),
                 "residual_value" => round($data_residual, 2),
-                // "date" => $date_modif_cost //debuging
+                "date" => $date_modif_cost //debuging
             ];
         }
 
         $total_income = $rental + $total_residual_value;
         $margin = $rental - $total_cost;
-        $profitMargin = ($rental !== 0) ? round(($margin / $rental) * 100, 2) : 0;
+        $profitMargin = $rental > 0 ? round(($margin / $rental) * 100, 2) : 0;
 
         // Final structured data
         $modifiedData = [
@@ -1348,7 +1347,7 @@ class PurchaseOrderController extends Controller
             // 'vehicle_in_cost' => $countVehicle,
 
             'forecasting_income' => round($forecasting_income, 2),
-            'avg_forecasting_income' => round($count_contracts ? ($forecasting_income / $count_contracts) : $forecasting_income, 2),
+            'avg_forecasting_income' => round($count_contracts > 0 ? ($forecasting_income / $count_contracts) : $forecasting_income, 2),
         ];
 
         if (count($salesOrders) > 0) {
