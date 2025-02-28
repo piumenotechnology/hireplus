@@ -151,10 +151,6 @@ Route::get('getuserpermission/{id}', 'App\Http\Controllers\Api\UserPermissionCon
 
 Route::get('getrolepermission/{id}', 'App\Http\Controllers\Api\UserPermissionController@getRolePermissionByslug');
 
-//calculator
-Route::get('calculator', 'App\Http\Controllers\Api\PurchaseOrderController@calculator');
-
-
 // BaseInterestDetail
 Route::get('sumtotalbaseinterest/{id}', 'App\Http\Controllers\Api\BaseInterestDetailController@sumTotalBaseInterest');
 Route::post('baseinterestdetail', 'App\Http\Controllers\Api\BaseInterestDetailController@store');
