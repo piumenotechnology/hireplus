@@ -1426,7 +1426,8 @@ class PurchaseOrderController extends Controller
 
             'forecasting_income' => round($forecasting_income, 2),
             'forecasting_cost' => round($forecasting_cost + $leasing->avaliable_cars_cost, 2),
-            'percentage_forecasting' => round(($avg_projected_margin / $forecasting_income) * 100,5),
+            // 'percentage_forecasting' => round(($avg_projected_margin / $forecasting_income) * 100,5),
+            'percentage_forecasting' => round(($avg_projected_margin / $projected_income) * 100,5),
             'avg_forecasting_income' => round($count_contracts > 0 ? $avg_projected_margin : 0, 2),
         ];
 
