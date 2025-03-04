@@ -1297,7 +1297,7 @@ class PurchaseOrderController extends Controller
                 'count_month_rental' => $countMonth,
                 'monthly_rental' => round($item->monthly_rental, 2),
                 'rental_income' => round($monthlyIncome,2),
-                'income_forcasting' => round($cekTotal_income,2),
+                // 'income_forcasting' => round($cekTotal_income,2),
                 // 'total_income_forcasting' => round($item->New_Total_income,2),
 
                 // 'total_cost_forcasting' => round($cek_total_cost,2),
@@ -1402,7 +1402,8 @@ class PurchaseOrderController extends Controller
         // $avg_projected_margin = ($forecasting_income - ($forecasting_cost_in_rental + $leasing->avaliable_cars_cost)) / $count_contracts; //cost in rental
         // $avg_projected_margin = $forecasting_income / $count_contracts;
 
-        $avg_projected_margin = ($projected_income - ($forecasting_cost_in_rental + $leasing->avaliable_cars_cost)) / $count_contracts; //cost in rental
+        $projected_margin = $projected_income - ($forecasting_cost_in_rental + $leasing->avaliable_cars_cost); //cost in rental
+        $avg_projected_margin = $projected_margin / $count_contracts; //cost in rental
 
         // Final structured data
         $modifiedData = [
@@ -1417,6 +1418,8 @@ class PurchaseOrderController extends Controller
             // 'count_vehicle_cost' => $countVehicleCost,
             // 'total_vehicle_income' => $countVehicleIncome ,
 
+            'projected_income' => round($projected_income, 2),
+
             // 'data'=> $count_data,
             // 'cars_income' => $carsIncome,
             // 'cars_count' => $carsCost,
@@ -1427,7 +1430,7 @@ class PurchaseOrderController extends Controller
             'forecasting_income' => round($forecasting_income, 2),
             'forecasting_cost' => round($forecasting_cost + $leasing->avaliable_cars_cost, 2),
             // 'percentage_forecasting' => round(($avg_projected_margin / $forecasting_income) * 100,5),
-            'percentage_forecasting' => round(($avg_projected_margin / $projected_income) * 100,5),
+            'percentage_forecasting' => round((($projected_margin / $projected_income) * 100),5),
             'avg_forecasting_income' => round($count_contracts > 0 ? $avg_projected_margin : 0, 2),
         ];
 
