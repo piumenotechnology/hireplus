@@ -1178,9 +1178,9 @@ class PurchaseOrderController extends Controller
                 DB::raw("(SELECT COUNT(*) FROM purchase_orders WHERE status_next_step = 'Available') AS available_cars_count"),
                 DB::raw("(SELECT SUM((regular_monthly_payment + vehicle_tracking) * hp_term ) FROM `purchase_orders` WHERE status_next_step = 'Available') AS avaliable_cars_cost"),
                 DB::raw('COALESCE((SELECT SUM(base_interest_details.total_base_interest)
-                FROM base_interest_details
-                WHERE base_interest_details.id_purchase_order = purchase_orders.id), 0)
-                AS total_base_interest'),
+                        FROM base_interest_details
+                        WHERE base_interest_details.id_purchase_order = purchase_orders.id), 0)
+                        AS total_base_interest'),
             )
             ->whereRaw('DATE_ADD(purchase_orders.hire_purchase_starting_date, INTERVAL COALESCE(purchase_orders.hp_term - 1, 0) MONTH) >= ?', [$date1])
             ->whereRaw('purchase_orders.hire_purchase_starting_date <= ?', [$date2])
@@ -1209,9 +1209,9 @@ class PurchaseOrderController extends Controller
 
         $forecasting_income = 0;
         $forecasting_cost = 0;
-        $forecasting_cost_in_rental = 0;
+        $projected_cost_in_rental = 0;
 
-        $count_data = 0;
+        // $count_data = 0;
 
         //debuging
         // $carsIncome = [];
@@ -1264,14 +1264,13 @@ class PurchaseOrderController extends Controller
 
             //forcasting cost
             $dateEndHire = new \DateTime($item->date_after_duration_cost);
-            $cek_total_cost = 0;
-            // $date_modif_cost = []; //debuging
-            if ($dateEndHire >= $start and $item->purchase_method !== "Cash" and $item->status_next_step !== "Sold" ) {
-                $cek_total_cost = ($item->regular_monthly_payment + $item->vehicle_tracking) * $item->hp_term + ($item->total_base_interest ?? 0);
-                $count_data++;
+            $projected_total_cost = 0;
+            if ($dateEndHire >= $start and $item->purchase_method !== "Cash" and $item->status_next_step !== "Sold") {
+                $projected_total_cost = ($item->regular_monthly_payment + $item->vehicle_tracking) * $item->hp_term + ($item->total_base_interest ?? 0);
+                // $count_data++; //debuging
             }
 
-            $forecasting_cost_in_rental += $cek_total_cost;
+            $projected_cost_in_rental += $projected_total_cost;
 
             //forcasting margin income
             $forecasting_income += $cekTotal_income;
@@ -1339,7 +1338,7 @@ class PurchaseOrderController extends Controller
             $countDatePaid = 0;
             $cek_total_cost = 0;
             // $date_modif_cost = []; //debuging
-            if ($dateEndHire >= $start and $leasing->purchase_method !== "Cash" and $leasing->status_next_step !== "Sold" ) {
+            if ($dateEndHire >= $start and $leasing->purchase_method !== "Cash" and $leasing->status_next_step !== "Sold") {
                 while ($currentPaid <= $end && $currentPaid <= $dateEndHire and $currentPaid < $dateEndHire) {
                     // $date_modif_cost[] = $currentPaid->format('Y-m-d'); //debuging
                     $countDatePaid++;
@@ -1386,7 +1385,7 @@ class PurchaseOrderController extends Controller
                 "hp_payment" => round($cost, 2),
                 "base_interest" => round($leasing->total_base_interest ?? 0, 2),
                 "residual_value" => round($data_residual, 2),
-                "forrecasting_cost" => round($cek_total_cost, 2),
+                // "forrecasting_cost" => round($cek_total_cost, 2),
                 // "available_cost" => $leasing->avaliable_cars_cost,
                 // "date" => $date_modif_cost //debuging
             ];
@@ -1399,10 +1398,10 @@ class PurchaseOrderController extends Controller
         $total_vehicle = $countVehicleIncome + $leasing->available_cars_count;
 
         // $avg_projected_margin = ($forecasting_income - ($forecasting_cost + $leasing->avaliable_cars_cost)) / $count_contracts;
-        // $avg_projected_margin = ($forecasting_income - ($forecasting_cost_in_rental + $leasing->avaliable_cars_cost)) / $count_contracts; //cost in rental
+        // $avg_projected_margin = ($forecasting_income - ($projected_cost_in_rental + $leasing->avaliable_cars_cost)) / $count_contracts; //cost in rental
         // $avg_projected_margin = $forecasting_income / $count_contracts;
 
-        $projected_margin = $projected_income - ($forecasting_cost_in_rental + $leasing->avaliable_cars_cost); //cost in rental
+        $projected_margin = $projected_income - ($projected_cost_in_rental + $leasing->avaliable_cars_cost); //cost in rental
         $avg_projected_margin = $projected_margin / $count_contracts; //cost in rental
 
         // Final structured data
@@ -1426,10 +1425,10 @@ class PurchaseOrderController extends Controller
             // 'totalMonth_rental' => $totalMonth_rental,
             // 'totalMonth_cost' => $totalMonth_cost,
             // 'vehicle_in_cost' => $countVehicleCost,
+            // 'percentage_forecasting' => round(($avg_projected_margin / $forecasting_income) * 100,5),
 
             'forecasting_income' => round($forecasting_income, 2),
             'forecasting_cost' => round($forecasting_cost + $leasing->avaliable_cars_cost, 2),
-            // 'percentage_forecasting' => round(($avg_projected_margin / $forecasting_income) * 100,5),
             'percentage_forecasting' => round((($projected_margin / $projected_income) * 100),5),
             'avg_forecasting_income' => round($count_contracts > 0 ? $avg_projected_margin : 0, 2),
         ];

@@ -291,7 +291,7 @@ class SalesOrderController extends Controller
         }
 
        $salesorder->total_monthly_rental = $purchaseorder->regular_monthly_payment * 11;
-        $salesorder->save();
+       $salesorder->save();
 
         //fo006 annum_payment
         if($purchaseorder->purchase_method != 'Hire Purchase' && $purchaseorder->purchase_method != 'Rent/Return') {
@@ -547,8 +547,6 @@ class SalesOrderController extends Controller
                 $salesorder->save();
             }
         }
-
-
 
         $salesorder->total_monthly_rental = $purchaseorder->regular_monthly_payment * 11;
         $salesorder->save();
