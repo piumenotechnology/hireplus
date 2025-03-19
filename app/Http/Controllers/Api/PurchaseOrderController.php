@@ -1123,6 +1123,57 @@ class PurchaseOrderController extends Controller
         $purchaseorder->sum_docdepoth = round($purchaseorder->documentation_fees_pu + $purchaseorder->hp_deposit_amount + $purchaseorder->other_fees, 2);
         $purchaseorder->save();
 
+        // Update Sales Order
+        $salesOrder = SalesOrder::where('id_purchase_order', $id)
+            ->where('next_step_status_sales', 'Hired')
+            ->first();
+
+        if ($salesOrder) {
+            // Calculate and update values
+            $salesOrder->total_monthly_rental = $purchaseorder->regular_monthly_payment * 11;
+
+            // fo006 annum_payment
+            if ($purchaseorder->purchase_method != 'Hire Purchase' && $purchaseorder->purchase_method != 'Rent/Return') {
+                $salesOrder->annum_payment = 0;
+            } else {
+                $salesOrder->annum_payment = round($purchaseorder->monthly_payment * $salesOrder->term_months, 2);
+            }
+
+            // Sales final payment
+            $hp_interest_persen = $purchaseorder->hp_interest_per_annum / 100;
+            if ($purchaseorder->purchase_method == 'Rent/Return') {
+                $salesOrder->sales_final_payment = round($purchaseorder->financing_amount - $salesOrder->total_monthly_rental, 2);
+            } else {
+                $salesOrder->sales_final_payment = round($purchaseorder->financing_amount * (1 + $hp_interest_persen) - $salesOrder->total_monthly_rental, 2);
+            }
+
+            // fo007 settlement
+            if ($purchaseorder->purchase_method != 'Hire Purchase' && $purchaseorder->purchase_method != 'Rent/Return') {
+                $salesOrder->settlement = round($purchaseorder->price_otr, 2);
+            } else if ($purchaseorder->purchase_method != 'Cash' && $purchaseorder->purchase_method != 'Rent/Return') {
+                $hp_interest_persen = $purchaseorder->hp_interest_per_annum / 100;
+                $salesOrder->settlement = round(($purchaseorder->financing_amount * (($salesOrder->term_month / 12) + $hp_interest_persen) - $salesOrder->annum_payment), 2);
+            } else {
+                $salesOrder->settlement = 0;
+            }
+
+            // fo008 penalty_early_settlement
+            if ($purchaseorder->purchase_method == 'Hire Purchase') {
+                $salesOrder->penalty_early_settlement = round(($salesOrder->sales_final_payment * $hp_interest_persen) / 11, 2);
+            } else {
+                $salesOrder->penalty_early_settlement = 0;
+            }
+
+            // fo0011 total_cost
+            if ($purchaseorder->purchase_method != 'Cash') {
+                $salesOrder->total_cost = round($purchaseorder->sum_docdepoth + $salesOrder->total_monthly_rental + $salesOrder->sales_final_payment + $salesOrder->penalty_early_settlement + $purchaseorder->final_fees + ($purchaseorder->vehicle_tracking * 11), 2);
+            } else {
+                $salesOrder->total_cost = round($purchaseorder->price_otr, 2);
+            }
+
+            $salesOrder->save();
+        }
+
         if ($purchaseorder->save()) {
             $baseInterest = BaseInterest::whereRaw('status = "active"')->first();
             $baseInterestDetail = BaseInterestDetail::whereRaw('id_purchase_order = "' . $id . '"')->get();
@@ -1156,15 +1207,12 @@ class PurchaseOrderController extends Controller
                 'so.*',
                 'po.*',
                 'so.id_purchase_order as newid',
-                 'income.New_Total_income',
-                // 'po.vehicle_registration',
-                // 'po.status_next_step',
+                'income.New_Total_income',
                 DB::raw("DATE_ADD(so.contract_start_date, INTERVAL so.term_months  MONTH) AS date_after_duration_income"),
                 DB::raw("DATE_ADD(po.hire_purchase_starting_date, INTERVAL COALESCE(po.hp_term, 0) MONTH) AS date_after_duration_cost"),
             )
             ->whereRaw('DATE_ADD(so.contract_start_date, INTERVAL (so.term_months - 1) MONTH) >= ?', [$date1])
             ->whereRaw('so.contract_start_date <= ?', [$date2])
-            // ->groupBy('so.id_purchase_order', 'income.New_Total_income', 'po.id')
             ->orderBy('po.vehicle_registration', 'ASC')
             ->get();
 
@@ -1187,40 +1235,40 @@ class PurchaseOrderController extends Controller
             ->orderBy('purchase_orders.id', 'ASC')
             ->get();
 
-        // $contract_sibling = DB::table('sales_orders')
-        //         ->select('*')
-        //         ->where('id_purchase_order', '=', $salesOrders->id_purchase_order)
-        //         ->get();
+
 
 
         $modifiedData = [];
         $rentalData = [];
         $leasingData = [];
 
-        $total_residual_value = 0;
+        $rental = 0;
+        $total_cost = 0;
+        $projected_cost = 0;
         $count_contracts = 0;
+        $projected_income = 0;
         $countVehicleCost = 0;
         $countVehicleIncome = 0;
-
-        $projected_income = 0;
-
-        $total_cost = 0;
-        $rental = 0;
-
-        $forecasting_income = 0;
-        $forecasting_cost = 0;
+        $total_residual_value = 0;
         $projected_cost_in_rental = 0;
-
-        // $count_data = 0;
+        $sum_all_projected_income = 0;
 
         //debuging
+        // $count_data = 0;
         // $carsIncome = [];
         // $carsCost = [];
         // $totalMonth_rental = 0;
         // $totalMonth_cost = 0;
+        // $checking_total_income = 0;
+        // $checking_total_rental = 0;
 
         //count rental
         foreach ($salesOrders as $item) {
+
+            $amount_oi = SalesOrder::join('other_incomes', 'other_incomes.id_purchase_order','=','sales_orders.id_purchase_order')
+            ->whereRaw('sales_orders.id_purchase_order = '.$item->newid)
+            ->value('amount_oi');
+
             $start = new \DateTime($date1);
             $end = new \DateTime($date2);
             $current = clone $start;
@@ -1247,6 +1295,7 @@ class PurchaseOrderController extends Controller
             $countMonth = 0;
             $monthlyIncome = 0;
             $cekTotal_income = 0;
+
             if ($item->next_step_status_sales === 'Hired') {
                 while ($current <= $end and $current <= $dateEndContract and $current < $dateEndContract) {
                     // $date_modif[] = $current->format('Y-m-d'); //debuging
@@ -1254,15 +1303,18 @@ class PurchaseOrderController extends Controller
                     $current->modify('first day of next month');
                     $current->setDate($current->format('Y'), $current->format('m'), min($originalIncomeDate, $current->format('t')));
                 }
-                $monthlyIncome = $item->monthly_rental * $countMonth;
                 $count_contracts++;
+                $monthlyIncome = $item->monthly_rental * $countMonth;
                 $cekTotal_income = $countMonth ? ($item->monthly_rental * $item->term_months) + ($item->initial_rental + $item->documentation_fees + $item->other_income) : 0;
             }
 
             // $totalMonth_rental += $countMonth; //debuging
             $rental += $monthlyIncome;
 
-            //forcasting cost
+            //projected margin income
+            $projected_income += $cekTotal_income;
+
+            //projected cost
             $dateEndHire = new \DateTime($item->date_after_duration_cost);
             $projected_total_cost = 0;
             if ($dateEndHire >= $start and $item->purchase_method !== "Cash" and $item->status_next_step !== "Sold") {
@@ -1272,9 +1324,6 @@ class PurchaseOrderController extends Controller
 
             $projected_cost_in_rental += $projected_total_cost;
 
-            //forcasting margin income
-            $forecasting_income += $cekTotal_income;
-
             //count cars
             if ($item->next_step_status_sales === 'Hired' and  $item->status_next_step ==='Hired') {
                 $countVehicleIncome++;
@@ -1282,20 +1331,29 @@ class PurchaseOrderController extends Controller
             }
 
             if($item->next_step_status_sales === 'Hired'){
-                $projected_income += $item->New_Total_income;
+                $sum_all_projected_income += $item->New_Total_income;
             }
 
             // Store data
             $rentalData[] = [
-                'id' => $item->newid,
-                'vehicle_registration' => $item->vehicle_registration,
+                // 'id' => $item->newid,
                 'agreement_number' => $item->agreement_number,
                 'contract_start_date' => $item->contract_start_date,
                 'contract_end_date' => $item->date_after_duration_income,
                 'status_contract' => $item->next_step_status_sales,
                 'count_month_rental' => $countMonth,
+                'vehicle_registration' => $item->vehicle_registration,
+                'id_purchase' => $item->newid,
                 'monthly_rental' => round($item->monthly_rental, 2),
                 'rental_income' => round($monthlyIncome,2),
+                // 'total_income' => round($item->total_income,2),
+                // 'total_rental' => round($item->rental_income,2),
+                // 'amount_oi' => $amount_oi,
+                // 'income' => $income,
+                // 'purchased_method' => $item->purchase_method ,
+
+
+                // 'income_forcasting_' => round($total_income_,2),
                 // 'income_forcasting' => round($cekTotal_income,2),
                 // 'total_income_forcasting' => round($item->New_Total_income,2),
 
@@ -1348,7 +1406,7 @@ class PurchaseOrderController extends Controller
                 $cek_total_cost = $countDatePaid > 0 ? ($leasing->regular_monthly_payment + $leasing->vehicle_tracking) * $leasing->hp_term + ($leasing->total_base_interest ?? 0) : 0;
             }
 
-            $forecasting_cost += $cek_total_cost;
+            $projected_cost += $cek_total_cost;
 
             // $totalMonth_cost += $countDatePaid; //debuging
 
@@ -1385,6 +1443,7 @@ class PurchaseOrderController extends Controller
                 "hp_payment" => round($cost, 2),
                 "base_interest" => round($leasing->total_base_interest ?? 0, 2),
                 "residual_value" => round($data_residual, 2),
+
                 // "forrecasting_cost" => round($cek_total_cost, 2),
                 // "available_cost" => $leasing->avaliable_cars_cost,
                 // "date" => $date_modif_cost //debuging
@@ -1394,15 +1453,13 @@ class PurchaseOrderController extends Controller
         $total_income = $rental + $total_residual_value;
         $margin = $rental - $total_cost;
         $profitMargin = $rental > 0 ? round(($margin / $rental) * 100, 2) : 0;
-
         $total_vehicle = $countVehicleIncome + $leasing->available_cars_count;
+        $projected_margin = $sum_all_projected_income - ($projected_cost_in_rental + $leasing->avaliable_cars_cost);
+        $avg_projected_margin = $projected_margin / $count_contracts;
 
-        // $avg_projected_margin = ($forecasting_income - ($forecasting_cost + $leasing->avaliable_cars_cost)) / $count_contracts;
-        // $avg_projected_margin = ($forecasting_income - ($projected_cost_in_rental + $leasing->avaliable_cars_cost)) / $count_contracts; //cost in rental
-        // $avg_projected_margin = $forecasting_income / $count_contracts;
-
-        $projected_margin = $projected_income - ($projected_cost_in_rental + $leasing->avaliable_cars_cost); //cost in rental
-        $avg_projected_margin = $projected_margin / $count_contracts; //cost in rental
+        // $avg_projected_margin = $projected_income / $count_contracts;
+        // $avg_projected_margin = ($projected_income - ($projected_cost + $leasing->avaliable_cars_cost)) / $count_contracts;
+        // $avg_projected_margin = ($projected_income - ($projected_cost_in_rental + $leasing->avaliable_cars_cost)) / $count_contracts; //cost in rental
 
         // Final structured data
         $modifiedData = [
@@ -1411,13 +1468,17 @@ class PurchaseOrderController extends Controller
             'total_residual' => round($total_residual_value, 2),
             'total_income' => round($total_income, 2),
             'margin' => round($margin, 2),
-            'margin_percentage' => $profitMargin,
+            'margin_percentage' => round($profitMargin,1),
             'total_contract' => $count_contracts,
             'total_vehicle' => $total_vehicle,
             // 'count_vehicle_cost' => $countVehicleCost,
-            // 'total_vehicle_income' => $countVehicleIncome ,
+            // 'total_vehicle_income' => $countVehicleIncome,
 
-            'projected_income' => round($projected_income, 2),
+            'projected_income' => round($sum_all_projected_income, 2), //all income in range time with same id
+            'forecasting_income' => round($projected_income, 2),
+            'forecasting_cost' => round($projected_cost + $leasing->avaliable_cars_cost, 2),
+            'percentage_forecasting' => round((($projected_margin / $sum_all_projected_income) * 100),1),
+            'avg_forecasting_income' => round($count_contracts > 0 ? $avg_projected_margin : 0, 1),
 
             // 'data'=> $count_data,
             // 'cars_income' => $carsIncome,
@@ -1425,12 +1486,7 @@ class PurchaseOrderController extends Controller
             // 'totalMonth_rental' => $totalMonth_rental,
             // 'totalMonth_cost' => $totalMonth_cost,
             // 'vehicle_in_cost' => $countVehicleCost,
-            // 'percentage_forecasting' => round(($avg_projected_margin / $forecasting_income) * 100,5),
-
-            'forecasting_income' => round($forecasting_income, 2),
-            'forecasting_cost' => round($forecasting_cost + $leasing->avaliable_cars_cost, 2),
-            'percentage_forecasting' => round((($projected_margin / $projected_income) * 100),5),
-            'avg_forecasting_income' => round($count_contracts > 0 ? $avg_projected_margin : 0, 2),
+            // 'percentage_forecasting' => round(($avg_projected_margin / $projected_income) * 100,5),
         ];
 
         if (count($salesOrders) > 0) {

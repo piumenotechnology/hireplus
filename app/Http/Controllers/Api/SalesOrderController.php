@@ -451,6 +451,7 @@ class SalesOrderController extends Controller
             'documentation_fees'    => 'required',
             'monthly_rental'        => 'required',
             'other_income'          => 'required',
+
             'margin_term'           => 'nullable',
             'total_income'          => 'nullable',
             'next_step_status_sales'  => 'nullable',
