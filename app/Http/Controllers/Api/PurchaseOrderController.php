@@ -462,11 +462,46 @@ class PurchaseOrderController extends Controller
 
         //if($rehiringorder == null) {
 
+        // $purchaseorder = DB::table('purchase_orders')
+        //     ->select('purchase_orders.id', 'purchase_orders.vehicle_registration', 'purchase_orders.vehicle_manufactur', 'purchase_orders.vehicle_model', 'purchase_orders.colour', 'purchase_orders.vehicle_variant', 'purchase_orders.min_contract_price_satu', 'purchase_orders.min_contract_price_dua', 'purchase_orders.stock_status', 'purchase_orders.status_next_step', 'purchase_orders.eta')
+        //     // ->whereRaw('status_next_step in ("Available")');
+        //     // ->whereRaw('(stock_status = "Available" OR stock_status IS NULL)')
+        //     ->whereRaw('purchase_orders.status_next_step = "Available"');
+
         $purchaseorder = DB::table('purchase_orders')
-            ->select('purchase_orders.id', 'purchase_orders.vehicle_registration', 'purchase_orders.vehicle_manufactur', 'purchase_orders.vehicle_model', 'purchase_orders.colour', 'purchase_orders.vehicle_variant', 'purchase_orders.min_contract_price_satu', 'purchase_orders.min_contract_price_dua', 'purchase_orders.stock_status', 'purchase_orders.status_next_step', 'purchase_orders.eta')
-            // ->whereRaw('status_next_step in ("Available")');
-            // ->whereRaw('(stock_status = "Available" OR stock_status IS NULL)')
-            ->whereRaw('status_next_step = "Available"');
+        ->leftJoinSub(
+            DB::table('sales_orders')
+                ->select(
+                    'id',
+                    'id_purchase_order',
+                    'contract_start_date',
+                    'next_step_status_sales',
+                    DB::raw('DATE_ADD(contract_start_date, INTERVAL term_months MONTH) AS end_contract')
+                )
+                ->whereRaw('id IN (SELECT MAX(id) FROM sales_orders GROUP BY id_purchase_order)'),
+            'latest_sales',
+            'purchase_orders.id',
+            '=',
+            'latest_sales.id_purchase_order'
+        )
+        ->select(
+            'purchase_orders.id',
+            'purchase_orders.vehicle_registration',
+            'purchase_orders.vehicle_manufactur',
+            'purchase_orders.vehicle_model',
+            'purchase_orders.colour',
+            'purchase_orders.vehicle_variant',
+            'purchase_orders.min_contract_price_satu',
+            'purchase_orders.min_contract_price_dua',
+            'purchase_orders.stock_status',
+            'purchase_orders.status_next_step',
+            'purchase_orders.eta',
+            'latest_sales.next_step_status_sales',
+            'latest_sales.contract_start_date',
+            'latest_sales.end_contract'
+        )
+        ->where('purchase_orders.status_next_step', 'Available');
+
 
         if ($s = $request->input('search')) {
             $purchaseorder->whereRaw("vehicle_registration LIKE '%" . $s . "%'")
@@ -1334,41 +1369,26 @@ class PurchaseOrderController extends Controller
                 $sum_all_projected_income += $item->New_Total_income;
             }
 
+            $status_date = 'still';
+
+            if($dateEndContract <= $end){
+                $status_date = 'finished';
+            }
+
             // Store data
             $rentalData[] = [
                 // 'id' => $item->newid,
+                'vehicle_registration' => $item->vehicle_registration,
                 'agreement_number' => $item->agreement_number,
                 'contract_start_date' => $item->contract_start_date,
                 'contract_end_date' => $item->date_after_duration_income,
                 'status_contract' => $item->next_step_status_sales,
                 'count_month_rental' => $countMonth,
-                'vehicle_registration' => $item->vehicle_registration,
-                'id_purchase' => $item->newid,
+                // 'id_purchase' => $item->newid,
                 'monthly_rental' => round($item->monthly_rental, 2),
                 'rental_income' => round($monthlyIncome,2),
-                // 'total_income' => round($item->total_income,2),
-                // 'total_rental' => round($item->rental_income,2),
-                // 'amount_oi' => $amount_oi,
-                // 'income' => $income,
                 // 'purchased_method' => $item->purchase_method ,
-
-
-                // 'income_forcasting_' => round($total_income_,2),
-                // 'income_forcasting' => round($cekTotal_income,2),
-                // 'total_income_forcasting' => round($item->New_Total_income,2),
-
-                // 'total_cost_forcasting' => round($cek_total_cost,2),
-                // 'purchase_method' => $item->purchase_method,
                 // 'status_vehicle' => $item->status_next_step,
-                // 'date_after_duration_cost' => $item->date_after_duration_cost,
-
-                // 'date' => $date_modif, //debuging
-                // 'cek' => $check_date_now, //debuging
-
-                // 'hp_payment' => round($subTotal,2),
-                // 'month_cost' => $countDatePaid,
-                // 'cost' => round($cost,2)
-                // 'margin' => round($monthlyIncome - $subTotal, 2),
             ];
         }
 
@@ -1441,12 +1461,8 @@ class PurchaseOrderController extends Controller
                 "count_month" => $countDatePaid,
                 "regular_monthly_payment" => round($subTotal, 2),
                 "hp_payment" => round($cost, 2),
-                "base_interest" => round($leasing->total_base_interest ?? 0, 2),
+                // "base_interest" => round($leasing->total_base_interest ?? 0, 2),
                 "residual_value" => round($data_residual, 2),
-
-                // "forrecasting_cost" => round($cek_total_cost, 2),
-                // "available_cost" => $leasing->avaliable_cars_cost,
-                // "date" => $date_modif_cost //debuging
             ];
         }
 
