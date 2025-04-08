@@ -102,6 +102,9 @@ class VehicleSoldController extends Controller
         $purchaseorder->status_next_step = 'Sold';
         $purchaseorder->save();
 
+        $purchaseorder->stock_status = NULL;
+        $purchaseorder->save();
+
         $sales_order->next_step_status_sales = 'Sold';
         $sales_order->save();
 
@@ -159,7 +162,8 @@ class VehicleSoldController extends Controller
         }
 
         $update = PurchaseOrder::where('id',$vehiclesold->id_purchase_order)
-                  ->update(['status_next_step' => 'Available']);
+                  ->update(['status_next_step' => 'Available',
+                            'stock_status' => 'Available']);
 
         if($vehiclesold->delete()){
             return response([

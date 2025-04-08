@@ -217,7 +217,8 @@ class RehiringController extends Controller
         }
 
         $update = PurchaseOrder::where('id',$rehiringorder->id_purchase_order)
-                    ->update(['status_next_step' => 'Hired']);
+                    ->update(['status_next_step' => 'Hired',
+                              'stock_status' => NULL]);
 
         $update = SalesOrder::where('id',$rehiringorder->id_sales_order)
                     ->update(['next_step_status_sales' => 'Hired']);

@@ -404,8 +404,8 @@ class SalesOrderController extends Controller
         }
 
         $update = PurchaseOrder::where('id',$salesorder->id_purchase_order)
-                    ->update(['status_next_step' => 'Available']);
-
+                    ->update(['status_next_step' => 'Available',
+                    'stock_status' => 'Available']);
 
         // return response([
         //     'message' => 'Delete Sales Order Success',
