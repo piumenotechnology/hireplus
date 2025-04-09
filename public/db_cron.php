@@ -21,7 +21,6 @@ if ($conn->connect_error) {
     exit(1);
 }
 
-// SQL query to update `purchase_orders` for eligible records in `sales_orders`
 $sql = "
     UPDATE purchase_orders AS po
     INNER JOIN sales_orders AS so ON po.id = so.id_purchase_order

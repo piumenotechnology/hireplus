@@ -497,7 +497,9 @@ class PurchaseOrderController extends Controller
             'latest_sales.contract_start_date',
             'latest_sales.end_contract'
         )
-        ->where('stock_status', '!=' , NULL);
+        // ->where('stock_status', '!=' , NULL);
+        ->whereNotNull('purchase_orders.stock_status')
+        ->where('purchase_orders.stock_status', '!=', 'Potential');
 
         if ($s = $request->input('search')) {
             $purchaseorder->whereRaw("vehicle_registration LIKE '%" . $s . "%'")
