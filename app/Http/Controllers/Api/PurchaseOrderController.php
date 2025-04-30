@@ -499,7 +499,8 @@ class PurchaseOrderController extends Controller
         )
         // ->where('stock_status', '!=' , NULL);
         ->whereNotNull('purchase_orders.stock_status')
-        ->where('purchase_orders.stock_status', '!=', 'Potential');
+        ->where('purchase_orders.stock_status', '!=', 'Potential')
+        ->where('purchase_orders.stock_status', '!=', 'Booked');
 
         if ($s = $request->input('search')) {
             $purchaseorder->whereRaw("vehicle_registration LIKE '%" . $s . "%'")
