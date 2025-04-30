@@ -503,9 +503,11 @@ class PurchaseOrderController extends Controller
         ->where('purchase_orders.stock_status', '!=', 'Booked');
 
         if ($s = $request->input('search')) {
-            $purchaseorder->whereRaw("vehicle_registration LIKE '%" . $s . "%'")
-                ->orWhereRaw("vehicle_model LIKE '%" . $s . "%'")
-                ->orWhereRaw("vehicle_manufactur LIKE '%" . $s . "%'");
+            $purchaseorder->where(function ($query) use ($s) {
+                $query->where('vehicle_registration', 'like', "%$s%")
+                    ->orWhere('vehicle_model', 'like', "%$s%")
+                    ->orWhere('vehicle_manufactur', 'like', "%$s%");
+            });
         }
 
         if ($sort = $request->input('sort')) {
