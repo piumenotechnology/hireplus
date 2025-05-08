@@ -11,7 +11,7 @@ class CustomResetPassword extends ResetPassword
     {
         // Customize the frontend link
         $resetUrl = config('app.frontend_url') .
-            '/reset.html?token=' . $this->token .
+            '/reset?token=' . $this->token .
             '&email=' . urlencode($notifiable->getEmailForPasswordReset());
 
         return (new MailMessage)
