@@ -497,14 +497,16 @@ class PurchaseOrderController extends Controller
             'latest_sales.contract_start_date',
             'latest_sales.end_contract'
         )
-        // ->where('stock_status', '!=' , NULL);
         ->whereNotNull('purchase_orders.stock_status')
-        ->where('purchase_orders.stock_status', '!=', 'Potential');
+        ->where('purchase_orders.stock_status', '!=', 'Potential')
+        ->where('purchase_orders.stock_status', '!=', 'Booked');
 
         if ($s = $request->input('search')) {
-            $purchaseorder->whereRaw("vehicle_registration LIKE '%" . $s . "%'")
-                ->orWhereRaw("vehicle_model LIKE '%" . $s . "%'")
-                ->orWhereRaw("vehicle_manufactur LIKE '%" . $s . "%'");
+            $purchaseorder->where(function ($query) use ($s) {
+                $query->where('vehicle_registration', 'like', "%$s%")
+                    ->orWhere('vehicle_model', 'like', "%$s%")
+                    ->orWhere('vehicle_manufactur', 'like', "%$s%");
+            });
         }
 
         if ($sort = $request->input('sort')) {

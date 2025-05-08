@@ -155,6 +155,11 @@ Route::get('getrolepermission/{id}', 'App\Http\Controllers\Api\UserPermissionCon
 Route::get('sumtotalbaseinterest/{id}', 'App\Http\Controllers\Api\BaseInterestDetailController@sumTotalBaseInterest');
 Route::post('baseinterestdetail', 'App\Http\Controllers\Api\BaseInterestDetailController@store');
 
+//forget password
+Route::post('forgot-password', 'App\Http\Controllers\Api\AuthController@sendResetLink');
+Route::post('reset-password', 'App\Http\Controllers\Api\AuthController@resetPassword');
+
+
 Route::group(['middleware' => 'auth:api'], function(){
     Route::post('/logout', 'App\Http\Controllers\Api\AuthController@logout');
 });
