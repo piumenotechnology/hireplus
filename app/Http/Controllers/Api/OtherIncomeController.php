@@ -66,6 +66,7 @@ class OtherIncomeController extends Controller
         $storeData = $request->all();
         $validate = Validator::make($storeData, [
             'id_purchase_order'            => 'required',
+            // 'id_sales_order'              => 'required',
             'date'                         => 'required|date_format:Y-m-d',
             'description_income'           => 'required',
             'amount_oi'                    => 'required|numeric',
@@ -120,6 +121,7 @@ class OtherIncomeController extends Controller
         $updateData = $request->all();
         $validate = Validator::make($updateData, [
             'id_purchase_order'            => 'required',
+            // 'id_sales_order'              => 'required',
             'date'                         => 'required|date_format:Y-m-d',
             'description_income'           => 'required',
             'amount_oi'                    => 'required|numeric',

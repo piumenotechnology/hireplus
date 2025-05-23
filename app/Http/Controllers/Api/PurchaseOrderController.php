@@ -225,6 +225,14 @@ class PurchaseOrderController extends Controller
             //->sum('total_income_new')
             ->get();
 
+        //delete this if you want to see the result
+        foreach ($purchaseorder as $po) {
+            if ($po->status_next_step == 'Sold'){
+                $po -> total_income = round($po->first_payment + ($po->monthly_rental * ($po->margin_term)) + $po->sold_price,2);
+            } else {
+                $po -> total_income = round($po->first_payment + ($po->monthly_rental * ($po->margin_term)),2);
+            }
+        }
 
         if (count($purchaseorder) > 0) {
             return response([
@@ -250,8 +258,6 @@ class PurchaseOrderController extends Controller
             ->whereRaw('purchase_orders.id = ' . $id)->take(1)->get();
         //->groupBy('agreement_number')
         //->sum('total_income_new')
-
-
 
         if (count($purchaseorder) > 0) {
             return response([
