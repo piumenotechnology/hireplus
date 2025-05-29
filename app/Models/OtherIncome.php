@@ -11,8 +11,12 @@ class OtherIncome extends Model
     use HasFactory;
 
     protected $fillable = [
-        'id_purchase_order','date','description_income',
-        'amount_oi','payment_profile'
+        'id_purchase_order',
+        'id_sales_order',
+        'date',
+        'description_income',
+        'amount_oi',
+        'payment_profile'
     ];
 
     public function getCreatedAtAttribute(){

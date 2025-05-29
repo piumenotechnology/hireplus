@@ -161,6 +161,28 @@ class PurchaseOrderController extends Controller
         ], 400);
     }
 
+    //show contract number in other income form
+    public function showContractNumberInOtherIncome($id)
+    {
+        $purchaseorder = DB::table('purchase_orders')
+            ->join('sales_orders', 'sales_orders.id_purchase_order', '=', 'purchase_orders.id')
+            ->select('sales_orders.id','sales_orders.agreement_number')
+            ->whereRaw('sales_orders.next_step_status_sales in ("Innactive", "Hired")')
+            ->where('sales_orders.id_purchase_order', $id)
+            ->get();
+        if (count($purchaseorder) > 0) {
+            return response([
+                'message' => 'Retrieve All Success',
+                'data' => $purchaseorder
+            ], 200);
+        }
+
+        return response([
+            'message' => 'Empty',
+            'data' => null
+        ], 400);
+    }
+
     //show original sales number in vehicle sold form
     public function showSalesNumberInVehicleSold()
     {
@@ -380,7 +402,8 @@ class PurchaseOrderController extends Controller
     public function listOtherIncome($id)
     {
         $purchaseorder = DB::table('other_incomes')
-            ->join('purchase_orders', 'purchase_orders.id', '=', 'other_incomes.id_purchase_order')
+            // ->join('purchase_orders', 'purchase_orders.id', '=', 'other_incomes.id_purchase_order')
+            ->join('sales_orders', 'sales_orders.id', '=', 'other_incomes.id_sales_order')
             ->selectRaw('round(SUM(amount_oi),2) as sum_other_income')
             ->whereRaw('purchase_orders.id = ' . $id)
             ->first();
@@ -1305,10 +1328,6 @@ class PurchaseOrderController extends Controller
 
         //count rental
         foreach ($salesOrders as $item) {
-
-            $amount_oi = SalesOrder::join('other_incomes', 'other_incomes.id_purchase_order','=','sales_orders.id_purchase_order')
-            ->whereRaw('sales_orders.id_purchase_order = '.$item->newid)
-            ->value('amount_oi');
 
             $start = new \DateTime($date1);
             $end = new \DateTime($date2);

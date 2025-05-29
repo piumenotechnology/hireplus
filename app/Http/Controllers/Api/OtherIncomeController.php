@@ -16,14 +16,15 @@ class OtherIncomeController extends Controller
         //$otherincomes = OtherIncome::all();
 
          $otherincome = DB::table('other_incomes')
-                     ->join('purchase_orders','purchase_orders.id','=','other_incomes.id_purchase_order')
-                     ->select('other_incomes.*','purchase_orders.vehicle_registration');
+                    ->join('sales_orders','sales_orders.id','=','other_incomes.id_sales_order')
+                    ->join('purchase_orders','purchase_orders.id','=','sales_orders.id_purchase_order')
+                     ->select('other_incomes.*','purchase_orders.vehicle_registration', 'sales_orders.agreement_number');
                      //->paginate(request()->per_page);
                      //->get();
 
         if ($s = $request->input('search')) {
-            $otherincome->whereRaw("vehicle_registration LIKE '%" . $s . "%'");
-
+            // $otherincome->whereRaw("vehicle_registration LIKE '%" . $s . "%'");
+            $otherincome->whereRaw("agreement_number LIKE '%" . $s . "%'");
         }
 
         if ($sort = $request->input('sort')) {
@@ -66,7 +67,7 @@ class OtherIncomeController extends Controller
         $storeData = $request->all();
         $validate = Validator::make($storeData, [
             'id_purchase_order'            => 'required',
-            // 'id_sales_order'              => 'required',
+            'id_sales_order'              => 'required',
             'date'                         => 'required|date_format:Y-m-d',
             'description_income'           => 'required',
             'amount_oi'                    => 'required|numeric',
@@ -120,8 +121,8 @@ class OtherIncomeController extends Controller
 
         $updateData = $request->all();
         $validate = Validator::make($updateData, [
-            'id_purchase_order'            => 'required',
-            // 'id_sales_order'              => 'required',
+            // 'id_purchase_order'            => 'required',
+            'id_sales_order'              => 'required',
             'date'                         => 'required|date_format:Y-m-d',
             'description_income'           => 'required',
             'amount_oi'                    => 'required|numeric',
@@ -131,7 +132,8 @@ class OtherIncomeController extends Controller
         if($validate->fails())
         return response(['message' => $validate->errors()],400);
 
-        $otherincome->id_purchase_order             = $updateData['id_purchase_order'];
+        // $otherincome->id_purchase_order             = $updateData['id_purchase_order'];
+        $otherincome->id_sales_order                = $updateData['id_sales_order'];
         $otherincome->date                          = $updateData['date'];
         $otherincome->description_income            = $updateData['description_income'];
         $otherincome->amount_oi                     = $updateData['amount_oi'];

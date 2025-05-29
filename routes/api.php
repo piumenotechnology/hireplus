@@ -22,7 +22,11 @@ Route::put('purchaseorder/{id}', 'App\Http\Controllers\Api\PurchaseOrderControll
 Route::delete('purchaseorder/{id}', 'App\Http\Controllers\Api\PurchaseOrderController@destroy');
 Route::get('purchaseorder', 'App\Http\Controllers\Api\PurchaseOrderController@index');
 Route::get('purchaseorderall', 'App\Http\Controllers\Api\PurchaseOrderController@indexAll');
-Route::get('showvehiclenumberexceptsold', 'App\Http\Controllers\Api\PurchaseOrderController@showVehicleNumberExceptSold');
+
+Route::get('showvehiclenumberexceptsold', 'App\Http\Controllers\Api\PurchaseOrderController@showVehicleNumberExceptSold'); //old using vehicle registration
+Route::get('showContractNumberInOtherIncome/{id}', 'App\Http\Controllers\Api\PurchaseOrderController@showContractNumberInOtherIncome'); //old using vehicle registration
+
+
 Route::get('showsalesnumberinvehiclesold', 'App\Http\Controllers\Api\PurchaseOrderController@showSalesNumberInVehicleSold');
 Route::get('availablestock', 'App\Http\Controllers\Api\PurchaseOrderController@availableStock');
 Route::get('potentialstock', 'App\Http\Controllers\Api\PurchaseOrderController@potentialStock');
