@@ -137,18 +137,20 @@ class PurchaseOrderController extends Controller
     public function showVehicleNumberExceptSold(Request $request)
     {
         $purchaseorder = DB::table('purchase_orders')
-            ->select('purchase_orders.*')
-            ->whereRaw('status_next_step in ("Available", "Hired")');
-        // ->get();
+            ->select('*')
+            ->whereIn('status_next_step', ['Available', 'Hired']);
 
         if ($s = $request->input('search')) {
-            $purchaseorder->whereRaw("vehicle_registration LIKE '%" . $s . "%'")
-                ->orWhereRaw("vehicle_manufactur LIKE '%" . $s . "%'");
+            $purchaseorder->where(function ($query) use ($s) {
+                $query->where('vehicle_registration', 'like', '%' . $s . '%')
+                    ->orWhere('vehicle_manufactur', 'like', '%' . $s . '%');
+            });
         }
 
-        $result = $purchaseorder->paginate(request()->per_page);
+        $perPage = $request->input('per_page', 10); // default to 10 if not provided
+        $result = $purchaseorder->paginate($perPage);
 
-        if (count($result) > 0) {
+        if ($result->count() > 0) {
             return response([
                 'message' => 'Retrieve All Success',
                 'data' => $result
@@ -158,15 +160,16 @@ class PurchaseOrderController extends Controller
         return response([
             'message' => 'Empty',
             'data' => null
-        ], 400);
+        ], 404); // 404 is more suitable for "not found" than 400 (bad request)
     }
+
 
     //show contract number in other income form
     public function showContractNumberInOtherIncome($id)
     {
         $purchaseorder = DB::table('purchase_orders')
             ->join('sales_orders', 'sales_orders.id_purchase_order', '=', 'purchase_orders.id')
-            ->select('sales_orders.id','sales_orders.agreement_number')
+            ->select('sales_orders.id','sales_orders.agreement_number', 'sales_orders.next_step_status_sales')
             ->whereRaw('sales_orders.next_step_status_sales in ("Innactive", "Hired")')
             ->where('sales_orders.id_purchase_order', $id)
             ->get();
@@ -402,8 +405,8 @@ class PurchaseOrderController extends Controller
     public function listOtherIncome($id)
     {
         $purchaseorder = DB::table('other_incomes')
-            // ->join('purchase_orders', 'purchase_orders.id', '=', 'other_incomes.id_purchase_order')
-            ->join('sales_orders', 'sales_orders.id', '=', 'other_incomes.id_sales_order')
+            ->join('purchase_orders', 'purchase_orders.id', '=', 'other_incomes.id_purchase_order')
+            // ->join('sales_orders', 'sales_orders.id', '=', 'other_incomes.id_sales_order')
             ->selectRaw('round(SUM(amount_oi),2) as sum_other_income')
             ->whereRaw('purchase_orders.id = ' . $id)
             ->first();
@@ -785,7 +788,6 @@ class PurchaseOrderController extends Controller
     //kalau sales yang muncul 2, tapi purchase yang ga memiliki sales ga muncul. Kalau purchase, sales yang double ga muncul
     public function compilationDB()
     {
-
         $purchaseorder = DB::table('purchase_orders')
             ->leftJoin('sales_orders', 'purchase_orders.id', '=', 'sales_orders.id_purchase_order')
             ->leftJoin('other_incomes', 'purchase_orders.id', '=', 'other_incomes.id_purchase_order')

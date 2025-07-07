@@ -23,9 +23,8 @@ Route::delete('purchaseorder/{id}', 'App\Http\Controllers\Api\PurchaseOrderContr
 Route::get('purchaseorder', 'App\Http\Controllers\Api\PurchaseOrderController@index');
 Route::get('purchaseorderall', 'App\Http\Controllers\Api\PurchaseOrderController@indexAll');
 
-Route::get('showvehiclenumberexceptsold', 'App\Http\Controllers\Api\PurchaseOrderController@showVehicleNumberExceptSold'); //old using vehicle registration
-Route::get('showContractNumberInOtherIncome/{id}', 'App\Http\Controllers\Api\PurchaseOrderController@showContractNumberInOtherIncome'); //old using vehicle registration
-
+Route::get('showvehiclenumberexceptsold', 'App\Http\Controllers\Api\PurchaseOrderController@showVehicleNumberExceptSold');
+Route::get('showContractNumberInOtherIncome/{id}', 'App\Http\Controllers\Api\PurchaseOrderController@showContractNumberInOtherIncome');
 
 Route::get('showsalesnumberinvehiclesold', 'App\Http\Controllers\Api\PurchaseOrderController@showSalesNumberInVehicleSold');
 Route::get('availablestock', 'App\Http\Controllers\Api\PurchaseOrderController@availableStock');
@@ -55,7 +54,9 @@ Route::get('sumresidualvalue', 'App\Http\Controllers\Api\PurchaseOrderController
 Route::get('listvehicleinvehiclecard/{id}', 'App\Http\Controllers\Api\PurchaseOrderController@listVehicleInVehicleCard');
 Route::get('listtotalincard/{id}', 'App\Http\Controllers\Api\PurchaseOrderController@listTotalInCard');
 Route::get('listcostincard/{id}', 'App\Http\Controllers\Api\PurchaseOrderController@listCostInCard');
+
 Route::get('listtotalincome/{id}', 'App\Http\Controllers\Api\PurchaseOrderController@listTotalIncome');
+
 Route::get('listtotalcost/{id}', 'App\Http\Controllers\Api\PurchaseOrderController@listTotalCost');
 Route::get('listrentalincome/{id}', 'App\Http\Controllers\Api\PurchaseOrderController@listRentalIncome');
 Route::get('listotherincome/{id}', 'App\Http\Controllers\Api\PurchaseOrderController@listOtherIncome');
@@ -151,7 +152,6 @@ Route::post('createrolepermission/{slug}', 'App\Http\Controllers\Api\UserPermiss
 Route::post('createrolepermissionbyindex/{slug}', 'App\Http\Controllers\Api\UserPermissionController@storePermissionByIndex');
 
 Route::get('getuserpermission/{id}', 'App\Http\Controllers\Api\UserPermissionController@getUserPermissionByid'); //get permission by user id
-// Route::get('getrolepermission/{id}', 'App\Http\Controllers\Api\UserPermissionController@getRolePermissionById'); // get permission by role id
 
 Route::get('getrolepermission/{id}', 'App\Http\Controllers\Api\UserPermissionController@getRolePermissionByslug');
 
