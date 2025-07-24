@@ -419,19 +419,57 @@ class PurchaseOrderController extends Controller
         ], 400);
     }
 
+    // public function listOtherIncome($id)
+    // {
+    //     $purchaseorder = DB::table('other_incomes')
+    //         ->join('purchase_orders', 'purchase_orders.id', '=', 'other_incomes.id_purchase_order')
+    //         // ->join('sales_orders', 'sales_orders.id', '=', 'other_incomes.id_sales_order')
+    //         ->selectRaw('round(SUM(amount_oi),2) as sum_other_income')
+    //         ->whereRaw('purchase_orders.id = ' . $id)
+    //         ->first();
+
+    //     $otherIncome = DB::table('other_incomes')
+    //         ->join('purchase_orders', 'purchase_orders.id', '=', 'other_incomes.id_purchase_order')
+    //         ->select('other_incomes.*')
+    //         ->whereRaw('purchase_orders.id = ' . $id)
+    //         ->get();
+
+    //     if ($purchaseorder != null) {
+    //         return response([
+    //             'message' => 'Retrieve All Success',
+    //             'sum_other_income' => $purchaseorder,
+    //             'data' => $otherIncome
+    //         ], 200);
+    //     }
+
+    //     return response([
+    //         'message' => 'Empty',
+    //         'data' => null
+    //     ], 400);
+    // }
+
     public function listOtherIncome($id)
     {
-        $purchaseorder = DB::table('other_incomes')
-            ->join('purchase_orders', 'purchase_orders.id', '=', 'other_incomes.id_purchase_order')
-            // ->join('sales_orders', 'sales_orders.id', '=', 'other_incomes.id_sales_order')
-            ->selectRaw('round(SUM(amount_oi),2) as sum_other_income')
-            ->whereRaw('purchase_orders.id = ' . $id)
+        // Get the sum of other incomes for the given purchase order
+        $sumOtherIncome = DB::table('other_incomes')
+            ->where('id_purchase_order', $id)
+            ->selectRaw('ROUND(SUM(amount_oi), 2) as sum_other_income')
             ->first();
 
-        if ($purchaseorder != null) {
+        // Get all other income entries related to that purchase order
+        $otherIncome = DB::table('other_incomes')
+            ->leftJoin('purchase_orders', 'purchase_orders.id', '=', 'other_incomes.id_purchase_order')
+            ->leftJoin('sales_orders', 'sales_orders.id', '=', 'other_incomes.id_sales_order')
+            ->where('other_incomes.id_purchase_order', $id)
+            ->select('other_incomes.*', 'sales_orders.agreement_number', 'purchase_orders.vehicle_registration')
+            ->get();
+
+        // Check if any data was found
+        if ($sumOtherIncome && $sumOtherIncome->sum_other_income !== null) {
             return response([
                 'message' => 'Retrieve All Success',
-                'data' => $purchaseorder
+                'sum_other_income' => $sumOtherIncome->sum_other_income ?? 0,
+                'data' => $otherIncome
             ], 200);
         }
 
@@ -440,6 +478,7 @@ class PurchaseOrderController extends Controller
             'data' => null
         ], 400);
     }
+
 
     public function listOtherCost($id)
     {
