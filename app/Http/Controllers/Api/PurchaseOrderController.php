@@ -16,7 +16,6 @@ use App\Models\SalesOrder;
 use App\Models\VehicleSold;
 use App\Models\BaseInterest;
 use App\Models\BaseInterestDetail;
-
 class PurchaseOrderController extends Controller
 {
     public function index()
@@ -235,46 +234,94 @@ class PurchaseOrderController extends Controller
         ], 400);
     }
 
+    // public function listVehicleInVehicleCard($id)
+    // {
+
+    //     //$salesByPurchaseId = SalesOrder::whereRaw('id_purchase_order = '.$id)->first();
+
+    //     $purchaseorder = DB::table('purchase_orders')
+    //         ->leftJoin('sales_orders', 'purchase_orders.id', '=', 'sales_orders.id_purchase_order')
+    //         ->leftJoin('rehiring_orders', 'sales_orders.id', '=', 'rehiring_orders.id_sales_order')
+    //         ->leftJoin('vehicle_solds', 'sales_orders.id', '=', 'vehicle_solds.id_sales_order')
+    //         ->leftJoin('other_incomes', 'sales_orders.id', '=', 'other_incomes.id_sales_order')
+    //         ->selectRaw('purchase_orders.*, sales_orders.*, rehiring_orders.*, vehicle_solds.*, other_incomes.amount_oi')
+    //         ->whereRaw('purchase_orders.id = ' . $id)
+    //         // ->groupBy('agreement_number')
+    //         //->sum('total_income_new')
+    //         ->get();
+
+    //     //delete this if you want to see the result
+    //     // foreach ($purchaseorder as $po) {
+    //     //     if ($po->status_next_step == 'Sold'){
+    //     //         $po -> total_income = round($po->first_payment + ($po->monthly_rental * ($po->margin_term)) + $po->sold_price,2);
+    //     //     } else {
+    //     //         $po -> total_income = round($po->first_payment + ($po->monthly_rental * ($po->margin_term)),2);
+    //     //     }
+    //     // }
+
+    //     foreach ($purchaseorder as $po) {
+    //     // Add other_income from amount_oi
+    //     $po->other_income = $po->amount_oi;
+
+    //     // Calculate total income
+    //     if ($po->status_next_step === 'Sold') {
+    //         $po->total_income = round(
+    //             ($po->first_payment ?? 0) + (($po->monthly_rental ?? 0) * ($po->margin_term ?? 0)) + ($po->sold_price ?? 0) + ($po->other_income ?? 0), 2
+    //         );
+    //     } else {
+    //         $po->total_income = round(
+    //             ($po->first_payment ?? 0) + (($po->monthly_rental ?? 0) * ($po->margin_term ?? 0)) + ($po->other_income ?? 0), 2
+    //         );
+    //     }
+    // }
+    //     if (count($purchaseorder) > 0) {
+    //         return response([
+    //             'message' => 'Retrieve All Success',
+    //             'data' => $purchaseorder
+    //         ], 200);
+    //     }
+
+    //     return response([
+    //         'message' => 'Empty',
+    //         'data' => null
+    //     ], 400);
+    // }
+
     public function listVehicleInVehicleCard($id)
     {
-
-        //$salesByPurchaseId = SalesOrder::whereRaw('id_purchase_order = '.$id)->first();
-
         $purchaseorder = DB::table('purchase_orders')
             ->leftJoin('sales_orders', 'purchase_orders.id', '=', 'sales_orders.id_purchase_order')
             ->leftJoin('rehiring_orders', 'sales_orders.id', '=', 'rehiring_orders.id_sales_order')
             ->leftJoin('vehicle_solds', 'sales_orders.id', '=', 'vehicle_solds.id_sales_order')
-            ->leftJoin('other_incomes', 'sales_orders.id', '=', 'other_incomes.id_sales_order')
-            ->selectRaw('purchase_orders.*, sales_orders.*, rehiring_orders.*, vehicle_solds.*, other_incomes.amount_oi')
-            ->whereRaw('purchase_orders.id = ' . $id)
-            // ->groupBy('agreement_number')
-            //->sum('total_income_new')
+            ->leftJoin(DB::raw('(SELECT id_sales_order, SUM(amount_oi) as total_other_income 
+                                FROM other_incomes 
+                                GROUP BY id_sales_order) as oi'), 
+                    'sales_orders.id', '=', 'oi.id_sales_order')
+            ->selectRaw('purchase_orders.*, 
+                        sales_orders.*, 
+                        rehiring_orders.*, 
+                        vehicle_solds.*, 
+                        COALESCE(oi.total_other_income,0) as other_income')
+            ->where('purchase_orders.id', $id)
             ->get();
 
-        //delete this if you want to see the result
-        // foreach ($purchaseorder as $po) {
-        //     if ($po->status_next_step == 'Sold'){
-        //         $po -> total_income = round($po->first_payment + ($po->monthly_rental * ($po->margin_term)) + $po->sold_price,2);
-        //     } else {
-        //         $po -> total_income = round($po->first_payment + ($po->monthly_rental * ($po->margin_term)),2);
-        //     }
-        // }
-
         foreach ($purchaseorder as $po) {
-        // Add other_income from amount_oi
-        $po->other_income = $po->amount_oi;
-
-        // Calculate total income
-        if ($po->status_next_step === 'Sold') {
-            $po->total_income = round(
-                ($po->first_payment ?? 0) + (($po->monthly_rental ?? 0) * ($po->margin_term ?? 0)) + ($po->sold_price ?? 0) + ($po->other_income ?? 0), 2
-            );
-        } else {
-            $po->total_income = round(
-                ($po->first_payment ?? 0) + (($po->monthly_rental ?? 0) * ($po->margin_term ?? 0)) + ($po->other_income ?? 0), 2
-            );
+            // Calculate total income with already-summed other_income
+            if ($po->status_next_step === 'Sold') {
+                $po->total_income = round(
+                    ($po->first_payment ?? 0) +
+                    (($po->monthly_rental ?? 0) * ($po->margin_term ?? 0)) +
+                    ($po->sold_price ?? 0) +
+                    ($po->other_income ?? 0), 2
+                );
+            } else {
+                $po->total_income = round(
+                    ($po->first_payment ?? 0) +
+                    (($po->monthly_rental ?? 0) * ($po->margin_term ?? 0)) +
+                    ($po->other_income ?? 0), 2
+                );
+            }
         }
-    }
 
         if (count($purchaseorder) > 0) {
             return response([
