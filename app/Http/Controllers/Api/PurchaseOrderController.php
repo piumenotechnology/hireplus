@@ -466,86 +466,58 @@ class PurchaseOrderController extends Controller
         ], 400);
     }
 
-    // public function listOtherIncome($id)
-    // {
-    //     $purchaseorder = DB::table('other_incomes')
-    //         ->join('purchase_orders', 'purchase_orders.id', '=', 'other_incomes.id_purchase_order')
-    //         // ->join('sales_orders', 'sales_orders.id', '=', 'other_incomes.id_sales_order')
-    //         ->selectRaw('round(SUM(amount_oi),2) as sum_other_income')
-    //         ->whereRaw('purchase_orders.id = ' . $id)
-    //         ->first();
-
-    //     $otherIncome = DB::table('other_incomes')
-    //         ->join('purchase_orders', 'purchase_orders.id', '=', 'other_incomes.id_purchase_order')
-    //         ->select('other_incomes.*')
-    //         ->whereRaw('purchase_orders.id = ' . $id)
-    //         ->get();
-
-    //     if ($purchaseorder != null) {
-    //         return response([
-    //             'message' => 'Retrieve All Success',
-    //             'sum_other_income' => $purchaseorder,
-    //             'data' => $otherIncome
-    //         ], 200);
-    //     }
-
-    //     return response([
-    //         'message' => 'Empty',
-    //         'data' => null
-    //     ], 400);
-    // }
-
     public function listOtherIncome($id)
     {
-        // Get the sum of other incomes for the given purchase order
+       // Sum directly in SQL, no selectRaw+first noise
         $sumOtherIncome = DB::table('other_incomes')
             ->where('id_purchase_order', $id)
-            ->selectRaw('ROUND(SUM(amount_oi), 2) as sum_other_income')
-            ->first();
+            ->sum('amount_oi'); // returns 0 if no rows
 
-        // Get all other income entries related to that purchase order
+        // Round for response, keep it numeric
+        $sumOtherIncome = round((float) $sumOtherIncome, 2);
+
+        // Pull the related rows
         $otherIncome = DB::table('other_incomes')
             ->leftJoin('purchase_orders', 'purchase_orders.id', '=', 'other_incomes.id_purchase_order')
             ->leftJoin('sales_orders', 'sales_orders.id', '=', 'other_incomes.id_sales_order')
             ->where('other_incomes.id_purchase_order', $id)
-            ->select('other_incomes.*', 'sales_orders.agreement_number', 'purchase_orders.vehicle_registration')
+            ->select(
+                'other_incomes.*',
+                'sales_orders.agreement_number',
+                'purchase_orders.vehicle_registration'
+            )
             ->get();
 
-        // Check if any data was found
-        if ($sumOtherIncome && $sumOtherIncome->sum_other_income !== null) {
-            return response([
-                'message' => 'Retrieve All Success',
-                'sum_other_income' => $sumOtherIncome->sum_other_income ?? 0,
-                'data' => $otherIncome
-            ], 200);
-        }
-
-        return response([
-            'message' => 'Empty',
-            'data' => null
-        ], 400);
+        // Always return 200, even if empty, this is a successful fetch
+        return response()->json([
+            'message' => 'OK',
+            'sum_other_income' => $sumOtherIncome,
+            'data' => $otherIncome,       // [] if none
+        ]);
     }
-
 
     public function listOtherCost($id)
     {
-        $purchaseorder = DB::table('other_costs')
-            ->join('purchase_orders', 'purchase_orders.id', '=', 'other_costs.id_purchase_order')
-            ->selectRaw('round(SUM(amount_oc),2) as sum_other_cost')
-            ->whereRaw('purchase_orders.id = ' . $id)
-            ->first();
+        $othercost = DB::table('other_costs')
+            ->leftJoin('purchase_orders', 'purchase_orders.id', '=', 'other_costs.id_purchase_order')
+            ->where('other_costs.id_purchase_order', $id)
+            ->select('purchase_orders.vehicle_registration', 'other_costs.*')
+            ->get();
 
-        if ($purchaseorder != null) {
+        $sumOtherCost = $othercost->sum('amount_oc');
+
+        if ($othercost->isNotEmpty()) {
             return response([
                 'message' => 'Retrieve All Success',
-                'data' => $purchaseorder
+                'sum_other_cost' => $sumOtherCost,
+                'data' => $othercost
             ], 200);
+        } else {
+            return response([
+                'message' => 'No data found',
+                'data' => []
+            ], 404);
         }
-
-        return response([
-            'message' => 'Empty',
-            'data' => null
-        ], 400);
     }
 
     public function listSoldPrice($id)
