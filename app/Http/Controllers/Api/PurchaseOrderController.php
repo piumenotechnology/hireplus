@@ -527,18 +527,24 @@ class PurchaseOrderController extends Controller
 
         $sumOtherCost = $othercost->sum('amount_oc');
 
-        if ($othercost->isNotEmpty()) {
             return response([
                 'message' => 'Retrieve All Success',
-                'sum_other_cost' => $sumOtherCost,
-                'data' => $othercost
+                'sum_other_cost' => $sumOtherCost || 0,
+                'data' => $othercost || []
             ], 200);
-        } else {
-            return response([
-                'message' => 'No data found',
-                'data' => []
-            ], 404);
-        }
+
+        // if ($othercost->isNotEmpty()) {
+        //     return response([
+        //         'message' => 'Retrieve All Success',
+        //         'sum_other_cost' => $sumOtherCost,
+        //         'data' => $othercost
+        //     ], 200);
+        // } else {
+        //     return response([
+        //         'message' => 'No data found',
+        //         'data' => null
+        //     ], 404);
+        // }
     }
 
     public function listSoldPrice($id)
