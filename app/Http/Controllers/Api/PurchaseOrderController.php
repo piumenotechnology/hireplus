@@ -446,12 +446,33 @@ class PurchaseOrderController extends Controller
     }
 
     public function listRentalIncome($id)
-    {
+    {   
+        //old queries
+        // $purchaseorder = DB::table('sales_orders')
+        //     ->join('purchase_orders', 'purchase_orders.id', '=', 'sales_orders.id_purchase_order')
+        //     ->selectRaw('round(SUM(rental_income),2) as sum_rental_income')
+        //     ->whereRaw('purchase_orders.id = ' . $id)
+        //     ->first();
+
         $purchaseorder = DB::table('sales_orders')
-            ->join('purchase_orders', 'purchase_orders.id', '=', 'sales_orders.id_purchase_order')
-            ->selectRaw('round(SUM(rental_income),2) as sum_rental_income')
-            ->whereRaw('purchase_orders.id = ' . $id)
-            ->first();
+        ->join('purchase_orders', 'purchase_orders.id', '=', 'sales_orders.id_purchase_order')
+        ->selectRaw("
+            ROUND(
+                SUM(
+                    (
+                        sales_orders.monthly_rental *
+                        CASE
+                            WHEN LOWER(TRIM(BOTH FROM sales_orders.next_step_status_sales)) = 'sold'
+                                THEN sales_orders.margin_term + 1
+                            ELSE sales_orders.margin_term
+                        END
+                    ) + sales_orders.first_payment
+                )
+            ) AS sum_rental_income
+        ")
+        ->where('purchase_orders.id', $id)
+        ->first();
+
 
         if ($purchaseorder != null) {
             return response([
