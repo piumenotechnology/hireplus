@@ -513,7 +513,7 @@ class PurchaseOrderController extends Controller
         return response()->json([
             'message' => 'OK',
             'sum_other_income' => $sumOtherIncome,
-            'data' => $otherIncome,       // [] if none
+            'data' => $otherIncome,
         ]);
     }
 
@@ -525,13 +525,17 @@ class PurchaseOrderController extends Controller
             ->select('purchase_orders.vehicle_registration', 'other_costs.*')
             ->get();
 
-        $sumOtherCost = $othercost->sum('amount_oc');
+        // $sumOtherCost = $othercost->sum('amount_oc');
 
-            return response([
-                'message' => 'Retrieve All Success',
-                'sum_other_cost' => $sumOtherCost || 0,
-                'data' => $othercost || []
-            ], 200);
+        $sumOtherCost = DB::table('other_costs')
+        ->where('id_purchase_order', $id)
+        ->sum('amount_oc');
+
+        return response() -> json([
+            'message' => 'Retrieve All Success',
+            'sum_other_cost' => $sumOtherCost,
+            'data' => $othercost,
+        ]);
 
         // if ($othercost->isNotEmpty()) {
         //     return response([
