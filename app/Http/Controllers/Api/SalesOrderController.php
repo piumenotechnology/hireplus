@@ -194,7 +194,7 @@ class SalesOrderController extends Controller
                             'sales_orders.id_purchase_order',
                             'purchase_orders.tgl_available'
                         )
-                        ->whereRaw('sales_orders.id = '.$agreement_number)
+                        ->whereRaw('sales_orders.agreement_number = '.$agreement_number)
                         ->get();
 
         if(count($purchaseorder) > 0){
