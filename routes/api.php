@@ -80,6 +80,7 @@ Route::get('showagreementnumber', 'App\Http\Controllers\Api\SalesOrderController
 Route::get('showactivesales', 'App\Http\Controllers\Api\SalesOrderController@showActiveSales');
 Route::get('showagreementnumberinrehiring', 'App\Http\Controllers\Api\SalesOrderController@showAgreementNumberInRehiring');
 Route::get('showagreementnumberinvehiclesold', 'App\Http\Controllers\Api\SalesOrderController@showAgreementNumberInVehicleSold');
+Route::get('showbyagreement', 'App\Http\Controllers\Api\SalesOrderController@showByAgreement');
 
 // RehiringOrder
 Route::get('rehiringorder/{id}', 'App\Http\Controllers\Api\RehiringController@show');
