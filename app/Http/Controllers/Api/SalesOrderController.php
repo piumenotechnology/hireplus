@@ -188,7 +188,6 @@ class SalesOrderController extends Controller
                         ->join('purchase_orders','purchase_orders.id','=','sales_orders.id_purchase_order')
                         ->select(
                             'sales_orders.id',
-                            'sales_orders.agreement_number',
                             'sales_orders.cust_name',
                             'sales_orders.contract_start_date',
                             'sales_orders.id_purchase_order',
