@@ -183,6 +183,33 @@ class SalesOrderController extends Controller
     //     ],400);
     // }
 
+    public function showByAgreement($agreement_number){
+       $purchaseorder = DB::table('sales_orders')
+                        ->join('purchase_orders','purchase_orders.id','=','sales_orders.id_purchase_order')
+                        ->select(
+                            'sales_orders.id',
+                            'sales_orders.agreement_number',
+                            'sales_orders.cust_name',
+                            'sales_orders.contract_start_date',
+                            'sales_orders.id_purchase_order',
+                            'purchase_orders.tgl_available'
+                        )
+                        ->whereRaw('sales_orders.id = '.$agreement_number)
+                        ->get();
+
+        if(count($purchaseorder) > 0){
+            return response([
+                'message' => 'Retrieve All Success',
+                'data' => $purchaseorder
+            ],200);
+        }
+
+        return response([
+            'message' => 'Empty',
+            'data' => null
+        ],400);
+    }
+
     public function show($id){
         $salesorders = DB::table('sales_orders')
         ->join('purchase_orders','purchase_orders.id','=','sales_orders.id_purchase_order')
