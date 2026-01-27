@@ -631,6 +631,7 @@ class PurchaseOrderController extends Controller
             'purchase_orders.stock_status',
             'purchase_orders.status_next_step',
             'purchase_orders.eta',
+            'purchase_orders.residual_value',
             'latest_sales.next_step_status_sales',
             'latest_sales.contract_start_date',
             'latest_sales.end_contract'
