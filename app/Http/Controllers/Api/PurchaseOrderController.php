@@ -670,7 +670,7 @@ class PurchaseOrderController extends Controller
     public function potentialStock(Request $request)
     {
         $purchaseorder = DB::table('purchase_orders')
-            ->select('purchase_orders.id', 'purchase_orders.vehicle_registration', 'purchase_orders.vehicle_manufactur', 'purchase_orders.vehicle_model', 'purchase_orders.colour', 'purchase_orders.vehicle_variant', 'purchase_orders.min_contract_price_satu', 'purchase_orders.min_contract_price_dua', 'purchase_orders.stock_status', 'purchase_orders.eta', 'purchase_orders.status_next_step')
+            ->select('purchase_orders.id', 'purchase_orders.vehicle_registration', 'purchase_orders.vehicle_manufactur', 'purchase_orders.vehicle_model', 'purchase_orders.colour', 'purchase_orders.vehicle_variant', 'purchase_orders.min_contract_price_satu', 'purchase_orders.min_contract_price_dua', 'purchase_orders.stock_status', 'purchase_orders.eta', 'purchase_orders.status_next_step', 'purchase_orders.residual_value')
             ->whereRaw('stock_status in ("Potential")');
 
         if ($s = $request->input('search')) {
@@ -701,7 +701,7 @@ class PurchaseOrderController extends Controller
     public function bookedStock(Request $request)
     {
         $purchaseorder = DB::table('purchase_orders')
-            ->select('purchase_orders.id', 'purchase_orders.vehicle_registration', 'purchase_orders.vehicle_manufactur', 'purchase_orders.vehicle_model', 'purchase_orders.colour', 'purchase_orders.vehicle_variant', 'purchase_orders.min_contract_price_satu', 'purchase_orders.min_contract_price_dua', 'purchase_orders.stock_status', 'purchase_orders.eta', 'purchase_orders.status_next_step')
+            ->select('purchase_orders.id', 'purchase_orders.vehicle_registration', 'purchase_orders.vehicle_manufactur', 'purchase_orders.vehicle_model', 'purchase_orders.colour', 'purchase_orders.vehicle_variant', 'purchase_orders.min_contract_price_satu', 'purchase_orders.min_contract_price_dua', 'purchase_orders.stock_status', 'purchase_orders.eta', 'purchase_orders.status_next_step','purchase_orders.residual_value')
             ->whereRaw('stock_status in ("Booked")');
 
         if ($s = $request->input('search')) {
@@ -731,7 +731,7 @@ class PurchaseOrderController extends Controller
     public function confirmedStock(Request $request)
     {
         $purchaseorder = DB::table('purchase_orders')
-            ->select('purchase_orders.id', 'purchase_orders.vehicle_registration', 'purchase_orders.vehicle_manufactur', 'purchase_orders.vehicle_model', 'purchase_orders.colour', 'purchase_orders.vehicle_variant', 'purchase_orders.min_contract_price_satu', 'purchase_orders.min_contract_price_dua', 'purchase_orders.stock_status', 'purchase_orders.eta', 'purchase_orders.status_next_step')
+            ->select('purchase_orders.id', 'purchase_orders.vehicle_registration', 'purchase_orders.vehicle_manufactur', 'purchase_orders.vehicle_model', 'purchase_orders.colour', 'purchase_orders.vehicle_variant', 'purchase_orders.min_contract_price_satu', 'purchase_orders.min_contract_price_dua', 'purchase_orders.stock_status', 'purchase_orders.eta', 'purchase_orders.status_next_step','purchase_orders.residual_value')
             ->whereRaw('stock_status in ("Confirmed Return")');
 
         if ($s = $request->input('search')) {
