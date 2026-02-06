@@ -13,6 +13,8 @@ use Illuminate\Support\Facades\Route;
 
 Route::post('register', 'App\Http\Controllers\Api\AuthController@register');
 Route::post('login', 'App\Http\Controllers\Api\AuthController@login');
+Route::post('verify-otp', 'App\Http\Controllers\Api\AuthController@verifyOtp');
+Route::post('resend-otp', 'App\Http\Controllers\Api\AuthController@resendOtp');
 
 // PurchaseOrderController
 Route::get('showvehiclenumberinsales', 'App\Http\Controllers\Api\PurchaseOrderController@showVehicleNumberinSales');
