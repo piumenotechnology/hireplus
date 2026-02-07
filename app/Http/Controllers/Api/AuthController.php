@@ -140,7 +140,7 @@ class AuthController extends Controller
 
             return response([
                 'message' => 'OTP sent to your email',
-                'user_id' => $user->id,
+                'user' => $user,
             ], 200);
         } catch (\Exception $e) {
             return response([
@@ -246,8 +246,7 @@ class AuthController extends Controller
 
             // Save OTP to database with 10-minute expiration
             OtpCode::create([
-                // 'user_id' => $user->id,
-                'user' => $user,
+                'user_id' => $user->id,
                 'otp_code' => $otpCode,
                 'expires_at' => Carbon::now()->addMinutes(10),
             ]);
