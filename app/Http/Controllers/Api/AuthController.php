@@ -246,7 +246,8 @@ class AuthController extends Controller
 
             // Save OTP to database with 10-minute expiration
             OtpCode::create([
-                'user_id' => $user->id,
+                // 'user_id' => $user->id,
+                'user' => $user,
                 'otp_code' => $otpCode,
                 'expires_at' => Carbon::now()->addMinutes(10),
             ]);
