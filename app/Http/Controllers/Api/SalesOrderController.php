@@ -183,6 +183,32 @@ class SalesOrderController extends Controller
     //     ],400);
     // }
 
+    public function showByAgreement($agreement_number){
+       $purchaseorder = DB::table('sales_orders')
+                        ->join('purchase_orders','purchase_orders.id','=','sales_orders.id_purchase_order')
+                        ->select(
+                            'sales_orders.id',
+                            'sales_orders.cust_name',
+                            'sales_orders.contract_start_date',
+                            'sales_orders.id_purchase_order',
+                            'purchase_orders.tgl_available'
+                        )
+                        ->whereRaw('sales_orders.agreement_number = '.$agreement_number)
+                        ->get();
+
+        if(count($purchaseorder) > 0){
+            return response([
+                'message' => 'Retrieve All Success',
+                'data' => $purchaseorder
+            ],200);
+        }
+
+        return response([
+            'message' => 'Empty',
+            'data' => null
+        ],400);
+    }
+
     public function show($id){
         $salesorders = DB::table('sales_orders')
         ->join('purchase_orders','purchase_orders.id','=','sales_orders.id_purchase_order')
@@ -263,32 +289,35 @@ class SalesOrderController extends Controller
         $salesorder->save();
 
 
-        $amount_oi = SalesOrder::join('other_incomes', 'other_incomes.id_purchase_order','=','sales_orders.id_purchase_order')
-        ->whereRaw('sales_orders.id_purchase_order = '.$salesorder->id_purchase_order)
-        ->value('amount_oi');
+        // $amount_oi = SalesOrder::join('other_incomes', 'other_incomes.id_purchase_order','=','sales_orders.id_purchase_order')
+        // ->whereRaw('sales_orders.id_purchase_order = '.$salesorder->id_purchase_order)
+        // ->value('amount_oi'); //old code
 
         //fo006
         $salesorder->first_payment = round($salesorder->initial_rental + $salesorder->documentation_fees + $salesorder->other_income,2);
         $salesorder->save();
 
         //fo002
-        if($salesorder->next_step_status_sales == 'Hired') {
-            if($amount_oi == null){
-                $salesorder->total_income = round($salesorder->first_payment + ($salesorder->monthly_rental * ($salesorder->margin_term) + 0),2);
-                $salesorder->save();
-            } else {
-                $salesorder->total_income = round($salesorder->first_payment + ($salesorder->monthly_rental * ($salesorder->margin_term) + $amount_oi),2);
-                $salesorder->save();
-            }
-        } else {
-            if($amount_oi == null){
-                $salesorder->total_income = round($salesorder->first_payment + ($salesorder->monthly_rental * ($salesorder->margin_term) + 0),2);
-                $salesorder->save();
-            } else {
-                $salesorder->total_income = round($salesorder->first_payment + ($salesorder->monthly_rental * ($salesorder->margin_term) + $amount_oi),2);
-                $salesorder->save();
-            }
-        }
+        // if($salesorder->next_step_status_sales == 'Hired') {
+        //     if($amount_oi == null){
+        //         $salesorder->total_income = round($salesorder->first_payment + ($salesorder->monthly_rental * ($salesorder->margin_term) + 0),2);
+        //         $salesorder->save();
+        //     } else {
+        //         $salesorder->total_income = round($salesorder->first_payment + ($salesorder->monthly_rental * ($salesorder->margin_term) + $amount_oi),2);
+        //         $salesorder->save();
+        //     }
+        // } else {
+        //     if($amount_oi == null){
+        //         $salesorder->total_income = round($salesorder->first_payment + ($salesorder->monthly_rental * ($salesorder->margin_term) + 0),2);
+        //         $salesorder->save();
+        //     } else {
+        //         $salesorder->total_income = round($salesorder->first_payment + ($salesorder->monthly_rental * ($salesorder->margin_term) + $amount_oi),2);
+        //         $salesorder->save();
+        //     }
+        // }
+
+        $salesorder->total_income = round($salesorder->first_payment + ($salesorder->monthly_rental * ($salesorder->margin_term) + 0),2);
+        $salesorder->save();
 
        $salesorder->total_monthly_rental = $purchaseorder->regular_monthly_payment * 11;
        $salesorder->save();
@@ -349,23 +378,26 @@ class SalesOrderController extends Controller
         $salesorder->save();
 
         //rental income
-        if($salesorder->next_step_status_sales == 'Hired') {
-            if($amount_oi == null){
-                $salesorder->rental_income = round($salesorder->first_payment + ($salesorder->monthly_rental * ($salesorder->margin_term) + 0),2);
-                $salesorder->save();
-            } else {
-                $salesorder->rental_income = round($salesorder->first_payment + ($salesorder->monthly_rental * ($salesorder->margin_term) + $amount_oi),2);
-                $salesorder->save();
-            }
-        } else {
-            if($amount_oi == null){
-                $salesorder->rental_income = round($salesorder->first_payment + ($salesorder->monthly_rental * ($salesorder->margin_term) + 0),2);
-                $salesorder->save();
-            } else {
-                $salesorder->rental_income = round($salesorder->first_payment + ($salesorder->monthly_rental * ($salesorder->margin_term) + $amount_oi),2);
-                $salesorder->save();
-            }
-        }
+        // if($salesorder->next_step_status_sales == 'Hired') {
+        //     if($amount_oi == null){
+        //         $salesorder->rental_income = round($salesorder->first_payment + ($salesorder->monthly_rental * ($salesorder->margin_term) + 0),2);
+        //         $salesorder->save();
+        //     } else {
+        //         $salesorder->rental_income = round($salesorder->first_payment + ($salesorder->monthly_rental * ($salesorder->margin_term) + $amount_oi),2);
+        //         $salesorder->save();
+        //     }
+        // } else {
+        //     if($amount_oi == null){
+        //         $salesorder->rental_income = round($salesorder->first_payment + ($salesorder->monthly_rental * ($salesorder->margin_term) + 0),2);
+        //         $salesorder->save();
+        //     } else {
+        //         $salesorder->rental_income = round($salesorder->first_payment + ($salesorder->monthly_rental * ($salesorder->margin_term) + $amount_oi),2);
+        //         $salesorder->save();
+        //     }
+        // }
+
+        $salesorder->rental_income = round($salesorder->first_payment + ($salesorder->monthly_rental * ($salesorder->margin_term) + 0),2);
+        $salesorder->save();
 
         // $salesorder->agreement_no = IdGenerator::generate(['table' => 'sales_orders','field'=>'agreement_no', 'length' => 7, 'prefix' =>'SO-']);
         //output: P00001
@@ -522,13 +554,19 @@ class SalesOrderController extends Controller
             $salesorder->save();
         }
 
-        $amount_oi = SalesOrder::join('other_incomes', 'other_incomes.id_purchase_order','=','sales_orders.id_purchase_order')
-        ->whereRaw('sales_orders.id_purchase_order = '.$salesorder->id_purchase_order)
+        // $amount_oi = SalesOrder::join('other_incomes', 'other_incomes.id_purchase_order','=','sales_orders.id_purchase_order')
+        // ->whereRaw('sales_orders.id_purchase_order = '.$salesorder->id_purchase_order)
+        // ->value('amount_oi');
+
+        $amount_oi = DB::table('other_incomes')
+        ->where('id_sales_order', $salesorder->id)
         ->value('amount_oi');
 
         //fo006
          $salesorder->first_payment = round($salesorder->initial_rental + $salesorder->documentation_fees + $salesorder->other_income,2);
         $salesorder->save();
+
+        // $salesorder->total_income = round($salesorder->first_payment + ($salesorder->monthly_rental * ($salesorder->margin_term) + 0),2);
 
         //fo002
         if($salesorder->next_step_status_sales == 'Hired') {
@@ -607,7 +645,7 @@ class SalesOrderController extends Controller
         $salesorder->contract_margin = round(($salesorder->total_income) - $salesorder->total_cost,2);
         $salesorder->save();
 
-        //rental income
+        // //rental income
         if($salesorder->next_step_status_sales == 'Hired') {
             if($amount_oi == null){
                 $salesorder->rental_income = round($salesorder->first_payment + ($salesorder->monthly_rental * ($salesorder->margin_term) + 0),2);
@@ -625,6 +663,8 @@ class SalesOrderController extends Controller
                 $salesorder->save();
             }
         }
+
+        // $salesorder->rental_income = round($salesorder->first_payment + ($salesorder->monthly_rental * ($salesorder->margin_term) + 0),2);
 
         // $salesorder->agreement_no = IdGenerator::generate(['table' => 'sales_orders','field'=>'agreement_no', 'length' => 7, 'prefix' =>'SO-']);
         //output: P00001

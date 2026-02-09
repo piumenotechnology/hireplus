@@ -13,6 +13,8 @@ use Illuminate\Support\Facades\Route;
 
 Route::post('register', 'App\Http\Controllers\Api\AuthController@register');
 Route::post('login', 'App\Http\Controllers\Api\AuthController@login');
+Route::post('verify-otp', 'App\Http\Controllers\Api\AuthController@verifyOtp');
+Route::post('resend-otp', 'App\Http\Controllers\Api\AuthController@resendOtp');
 
 // PurchaseOrderController
 Route::get('showvehiclenumberinsales', 'App\Http\Controllers\Api\PurchaseOrderController@showVehicleNumberinSales');
@@ -22,7 +24,10 @@ Route::put('purchaseorder/{id}', 'App\Http\Controllers\Api\PurchaseOrderControll
 Route::delete('purchaseorder/{id}', 'App\Http\Controllers\Api\PurchaseOrderController@destroy');
 Route::get('purchaseorder', 'App\Http\Controllers\Api\PurchaseOrderController@index');
 Route::get('purchaseorderall', 'App\Http\Controllers\Api\PurchaseOrderController@indexAll');
+
 Route::get('showvehiclenumberexceptsold', 'App\Http\Controllers\Api\PurchaseOrderController@showVehicleNumberExceptSold');
+Route::get('showContractNumberInOtherIncome/{id}', 'App\Http\Controllers\Api\PurchaseOrderController@showContractNumberInOtherIncome');
+
 Route::get('showsalesnumberinvehiclesold', 'App\Http\Controllers\Api\PurchaseOrderController@showSalesNumberInVehicleSold');
 Route::get('availablestock', 'App\Http\Controllers\Api\PurchaseOrderController@availableStock');
 Route::get('potentialstock', 'App\Http\Controllers\Api\PurchaseOrderController@potentialStock');
@@ -51,7 +56,9 @@ Route::get('sumresidualvalue', 'App\Http\Controllers\Api\PurchaseOrderController
 Route::get('listvehicleinvehiclecard/{id}', 'App\Http\Controllers\Api\PurchaseOrderController@listVehicleInVehicleCard');
 Route::get('listtotalincard/{id}', 'App\Http\Controllers\Api\PurchaseOrderController@listTotalInCard');
 Route::get('listcostincard/{id}', 'App\Http\Controllers\Api\PurchaseOrderController@listCostInCard');
+
 Route::get('listtotalincome/{id}', 'App\Http\Controllers\Api\PurchaseOrderController@listTotalIncome');
+
 Route::get('listtotalcost/{id}', 'App\Http\Controllers\Api\PurchaseOrderController@listTotalCost');
 Route::get('listrentalincome/{id}', 'App\Http\Controllers\Api\PurchaseOrderController@listRentalIncome');
 Route::get('listotherincome/{id}', 'App\Http\Controllers\Api\PurchaseOrderController@listOtherIncome');
@@ -75,6 +82,7 @@ Route::get('showagreementnumber', 'App\Http\Controllers\Api\SalesOrderController
 Route::get('showactivesales', 'App\Http\Controllers\Api\SalesOrderController@showActiveSales');
 Route::get('showagreementnumberinrehiring', 'App\Http\Controllers\Api\SalesOrderController@showAgreementNumberInRehiring');
 Route::get('showagreementnumberinvehiclesold', 'App\Http\Controllers\Api\SalesOrderController@showAgreementNumberInVehicleSold');
+Route::get('showbyagreement/{agreement_number}', 'App\Http\Controllers\Api\SalesOrderController@showByAgreement');
 
 // RehiringOrder
 Route::get('rehiringorder/{id}', 'App\Http\Controllers\Api\RehiringController@show');
@@ -147,13 +155,16 @@ Route::post('createrolepermission/{slug}', 'App\Http\Controllers\Api\UserPermiss
 Route::post('createrolepermissionbyindex/{slug}', 'App\Http\Controllers\Api\UserPermissionController@storePermissionByIndex');
 
 Route::get('getuserpermission/{id}', 'App\Http\Controllers\Api\UserPermissionController@getUserPermissionByid'); //get permission by user id
-// Route::get('getrolepermission/{id}', 'App\Http\Controllers\Api\UserPermissionController@getRolePermissionById'); // get permission by role id
 
 Route::get('getrolepermission/{id}', 'App\Http\Controllers\Api\UserPermissionController@getRolePermissionByslug');
 
 // BaseInterestDetail
 Route::get('sumtotalbaseinterest/{id}', 'App\Http\Controllers\Api\BaseInterestDetailController@sumTotalBaseInterest');
 Route::post('baseinterestdetail', 'App\Http\Controllers\Api\BaseInterestDetailController@store');
+
+//forget password
+Route::post('forgot-password', 'App\Http\Controllers\Api\AuthController@sendResetLink');
+Route::post('reset-password', 'App\Http\Controllers\Api\AuthController@resetPassword');
 
 Route::group(['middleware' => 'auth:api'], function(){
     Route::post('/logout', 'App\Http\Controllers\Api\AuthController@logout');

@@ -108,8 +108,8 @@ class VehicleSoldController extends Controller
         $sales_order->next_step_status_sales = 'Sold';
         $sales_order->save();
 
-        $amount_oi = VehicleSold::join('other_incomes', 'other_incomes.id_purchase_order','=','vehicle_solds.id_purchase_order')
-         ->whereRaw('vehicle_solds.id_purchase_order = '.$vehiclesold->id_purchase_order)
+        $amount_oi = VehicleSold::join('other_incomes', 'other_incomes.id_sales_order','=','vehicle_solds.id_sales_order')
+         ->whereRaw('vehicle_solds.id_sales_order = '.$vehiclesold->id_sales_order)
          ->value('amount_oi');
 
         $vehiclesolddate = \Carbon\Carbon::parse($request->vehicle_sold_date);
@@ -129,11 +129,9 @@ class VehicleSoldController extends Controller
          if($amount_oi == null){
                 $sales_order->total_income = round($vehiclesold->sold_price + $sales_order->first_payment + ($sales_order->monthly_rental * ($sales_order->margin_term) + 0),2);
                 $sales_order->save();
-
          } else {
             $sales_order->total_income = round($vehiclesold->sold_price + $sales_order->first_payment + ($sales_order->monthly_rental * ($sales_order->margin_term) + $amount_oi),2);
             $sales_order->save();
-
          }
 
         //  //fo007
@@ -209,8 +207,8 @@ class VehicleSoldController extends Controller
 
         $sales_order = SalesOrder::find($vehiclesold->id_sales_order);
 
-        $amount_oi = VehicleSold::join('other_incomes', 'other_incomes.id_purchase_order','=','vehicle_solds.id_purchase_order')
-        ->whereRaw('vehicle_solds.id_purchase_order = '.$vehiclesold->id_purchase_order)
+        $amount_oi = VehicleSold::join('other_incomes', 'other_incomes.id_sales_order','=','vehicle_solds.id_sales_order')
+        ->whereRaw('vehicle_solds.id_sales_order = '.$vehiclesold->id_sales_order)
         ->value('amount_oi');
 
         $vehiclesolddate = \Carbon\Carbon::parse($request->vehicle_sold_date);

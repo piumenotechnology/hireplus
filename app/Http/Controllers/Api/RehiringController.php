@@ -141,9 +141,13 @@ class RehiringController extends Controller
         $sales_order->next_step_status_sales = 'Innactive';
         $sales_order->save();
 
-        $amount_oi = RehiringOrder::join('other_incomes', 'other_incomes.id_purchase_order','=','rehiring_orders.id_purchase_order')
-         ->whereRaw('rehiring_orders.id_purchase_order = '.$rehiringorder->id_purchase_order)
-         ->value('amount_oi');
+        // $amount_oi = RehiringOrder::join('other_incomes', 'other_incomes.id_purchase_order','=','rehiring_orders.id_purchase_order')
+        //  ->whereRaw('rehiring_orders.id_purchase_order = '.$rehiringorder->id_purchase_order)
+        //  ->value('amount_oi');
+
+        $amount_oi = DB::table('other_incomes')
+        ->where('id_sales_order',$rehiringorder->id_sales_order )
+        ->value('amount_oi');
 
         $vehiclereturndate = \Carbon\Carbon::parse($request->vehicle_return_date);
         $contractstartdate = \Carbon\Carbon::parse($sales_order->contract_start_date);
@@ -277,8 +281,12 @@ class RehiringController extends Controller
         //update tgl available dengan tgl rehiring, blm bisa terganti di tgl available, klk rehiringnya di update
         $purchaseorder->tgl_available = $rehiringorder->vehicle_return_date;
 
-        $amount_oi = RehiringOrder::join('other_incomes', 'other_incomes.id_purchase_order','=','rehiring_orders.id_purchase_order')
-        ->whereRaw('rehiring_orders.id_purchase_order = '.$rehiringorder->id_purchase_order)
+        // $amount_oi = RehiringOrder::join('other_incomes', 'other_incomes.id_purchase_order','=','rehiring_orders.id_purchase_order')
+        // ->whereRaw('rehiring_orders.id_purchase_order = '.$rehiringorder->id_purchase_order)
+        // ->value('amount_oi');
+
+        $amount_oi = DB::table('other_incomes')
+        ->where('id_sales_order',$rehiringorder->id_sales_order )
         ->value('amount_oi');
 
         $vehiclereturndate = \Carbon\Carbon::parse($request->vehicle_return_date);
