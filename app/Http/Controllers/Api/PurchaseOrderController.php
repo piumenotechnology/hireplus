@@ -1609,6 +1609,7 @@ class PurchaseOrderController extends Controller
                 "sold_date" => $leasing->vehicle_sold_date,
                 "count_month" => $countDatePaid,
                 "regular_monthly_payment" => round($subTotal, 2),
+                "monthly_payment" => round($leasing->monthly_payment,2),
                 "hp_payment" => round($cost, 2),
                 "base_interest" => round($leasing->total_base_interest ?? 0, 2),
                 "residual_value" => round($data_residual, 2),
