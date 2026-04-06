@@ -1612,7 +1612,9 @@ class PurchaseOrderController extends Controller
                 "monthly_payment" => round($leasing->monthly_payment,2),
                 "hp_payment" => round($cost, 2),
                 "base_interest" => round($leasing->total_base_interest ?? 0, 2),
-                "residual_value" => round($data_residual, 2),
+                // "residual_value" => round($data_residual, 2),
+                "residual_value" => round($leasing->residual_value, 2),
+                "final_payment" => round($leasing->final_payment, 2)
 
                 // "forrecasting_cost" => round($cek_total_cost, 2),
                 // "available_cost" => $leasing->avaliable_cars_cost,
