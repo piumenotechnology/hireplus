@@ -131,7 +131,7 @@ class AuthController extends Controller
             // Save OTP to database with 10-minute expiration
             OtpCode::create([
                 'user_id' => $user->id,
-                'otp_code' => $otpCode,
+                'otp_code' => Hash::make($otpCode),
                 'expires_at' => Carbon::now()->addMinutes(5),
             ]);
 
@@ -166,11 +166,10 @@ class AuthController extends Controller
 
         try {
             $otpRecord = OtpCode::where('user_id', $request->user_id)
-                ->where('otp_code', $request->otp_code)
                 ->whereNull('verified_at')
                 ->first();
 
-            if (!$otpRecord) {
+            if (!$otpRecord || !Hash::check($request->otp_code, $otpRecord->otp_code)) {
                 return response([
                     'message' => 'Invalid OTP code',
                 ], 401);
@@ -247,7 +246,7 @@ class AuthController extends Controller
             // Save OTP to database with 10-minute expiration
             OtpCode::create([
                 'user_id' => $user->id,
-                'otp_code' => $otpCode,
+                'otp_code' => Hash::make($otpCode),
                 'expires_at' => Carbon::now()->addMinutes(10),
             ]);
 
