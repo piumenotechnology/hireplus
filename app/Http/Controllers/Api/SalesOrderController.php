@@ -13,6 +13,7 @@ use App\Models\SalesOrder;
 use App\Models\PurchaseOrder;
 use App\Models\RehiringOrder;
 use App\Models\VehicleSold;
+use PDO;
 
 use Haruncpi\LaravelIdGenerator\IdGenerator;
 
@@ -230,6 +231,25 @@ class SalesOrderController extends Controller
         ],400);
     }
 
+    function getBaseInterest($date, $pdo)
+    {
+        $stmt = $pdo->prepare("
+            SELECT percentage
+            FROM base_interests
+            WHERE start_date <= :date
+            ORDER BY start_date DESC
+            LIMIT 1
+        ");
+
+        $stmt->execute([
+            ':date' => $date->format('Y-m-d')
+        ]);
+
+        $result = $stmt->fetch(\PDO::FETCH_ASSOC);  // Add backslash here
+
+        return $result ? (float)$result['percentage'] : 0;
+    }
+
     public function store(Request $request){
         DB::beginTransaction();
         try{
@@ -365,13 +385,47 @@ class SalesOrderController extends Controller
         }
 
       //fo0011 total_cost
-        if($purchaseorder->purchase_method != 'Cash'){
-            $salesorder->total_cost = round($purchaseorder->sum_docdepoth + $salesorder->total_monthly_rental + $salesorder->sales_final_payment + $salesorder->penalty_early_settlement  + $purchaseorder->final_fees +  ($purchaseorder->vehicle_tracking * 11),2);
-            $salesorder->save();
+        // if($purchaseorder->purchase_method != 'Cash'){
+        //     $salesorder->total_cost = round($purchaseorder->sum_docdepoth + $salesorder->total_monthly_rental + $salesorder->sales_final_payment + $salesorder->penalty_early_settlement  + $purchaseorder->final_fees +  ($purchaseorder->vehicle_tracking * 11),2);
+        //     $salesorder->save();
+        // } else {
+        //     $salesorder->total_cost = round($purchaseorder->price_otr,2);
+        //     $salesorder->save();
+        // }
+
+        if ($purchaseorder->purchase_method != 'Cash') {
+
+            $financing = $purchaseorder->price_otr - $purchaseorder->hp_deposit_amount;
+            $total = 0;
+
+            $pdo = DB::connection()->getPdo();
+            $currentDate = new \DateTime($purchaseorder->hire_purchase_starting_date);
+
+            for ($i = 1; $i <= $purchaseorder->hp_term; $i++) {
+
+                $baseRate = $this->getBaseInterest($currentDate, $pdo);
+
+                $interest = ($financing * $purchaseorder->hp_interest_per_annum / 100) / 12;
+                $bankBase = ($financing * $baseRate / 100) / 12;
+
+                $monthly = $purchaseorder->monthly_payment + $interest + $bankBase;
+
+                $total += $monthly;
+
+                $currentDate->modify('+1 month');
+            }
+
+            $salesorder->total_cost = round(
+                $total +
+                $purchaseorder->final_payment +
+                $purchaseorder->hp_deposit_amount +
+                $purchaseorder->documentation_fees_pu +
+                $purchaseorder->final_fees,2);
+
         } else {
-            $salesorder->total_cost = round($purchaseorder->price_otr,2);
-            $salesorder->save();
+            $salesorder->total_cost = round($purchaseorder->price_otr, 2);
         }
+
 
         //fo0013 contract_margin
         $salesorder->contract_margin = round(($salesorder->total_income) - $salesorder->total_cost,2);
@@ -633,12 +687,48 @@ class SalesOrderController extends Controller
         }
 
       //fo0011 total_cost
-        if($purchaseorder->purchase_method != 'Cash'){
-            $salesorder->total_cost = round($purchaseorder->sum_docdepoth + $salesorder->total_monthly_rental + $salesorder->sales_final_payment + $salesorder->penalty_early_settlement  + $purchaseorder->final_fees +  ($purchaseorder->vehicle_tracking * 11),2);
-            $salesorder->save();
+        // if($purchaseorder->purchase_method != 'Cash'){
+        //     $salesorder->total_cost = round($purchaseorder->sum_docdepoth + $salesorder->total_monthly_rental + $salesorder->sales_final_payment + $salesorder->penalty_early_settlement  + $purchaseorder->final_fees +  ($purchaseorder->vehicle_tracking * 11),2);
+        //     $salesorder->save();
+        // } else {
+        //     $salesorder->total_cost = round($purchaseorder->price_otr,2);
+        //     $salesorder->save();
+        // }
+
+        
+        if ($purchaseorder->purchase_method != 'Cash') {
+
+            $financing = $purchaseorder->price_otr - $purchaseorder->hp_deposit_amount;
+            $total = 0;
+
+            $pdo = DB::connection()->getPdo();
+            $currentDate = new \DateTime($purchaseorder->hire_purchase_starting_date);
+
+            for ($i = 1; $i <= $purchaseorder->hp_term; $i++) {
+
+                $baseRate = $this->getBaseInterest($currentDate, $pdo);
+
+                $interest = ($financing * $purchaseorder->hp_interest_per_annum / 100) / 12;
+                $bankBase = ($financing * $baseRate / 100) / 12;
+
+                $monthly = $purchaseorder->monthly_payment + $interest + $bankBase;
+
+                $total += $monthly;
+
+                $currentDate->modify('+1 month');
+            }
+
+            $salesorder->total_cost = round(
+                $total +
+                $purchaseorder->final_payment +
+                $purchaseorder->hp_deposit_amount +
+                $purchaseorder->documentation_fees_pu +
+                $purchaseorder->final_fees,
+                // ($purchaseorder->vehicle_tracking * 11),
+            2);
+
         } else {
-            $salesorder->total_cost = round($purchaseorder->price_otr,2);
-            $salesorder->save();
+            $salesorder->total_cost = round($purchaseorder->price_otr, 2);
         }
 
         //fo0012 contract_margin

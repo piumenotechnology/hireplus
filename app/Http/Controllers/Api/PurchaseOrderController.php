@@ -16,6 +16,8 @@ use App\Models\SalesOrder;
 use App\Models\VehicleSold;
 use App\Models\BaseInterest;
 use App\Models\BaseInterestDetail;
+use PDO;
+
 class PurchaseOrderController extends Controller
 {
     public function index()
@@ -1154,6 +1156,25 @@ class PurchaseOrderController extends Controller
         ], 400);
     }
 
+    function getBaseInterest($date, $pdo)
+    {
+        $stmt = $pdo->prepare("
+            SELECT percentage
+            FROM base_interests
+            WHERE start_date <= :date
+            ORDER BY start_date DESC
+            LIMIT 1
+        ");
+
+        $stmt->execute([
+            ':date' => $date->format('Y-m-d')
+        ]);
+
+        $result = $stmt->fetch(\PDO::FETCH_ASSOC);  // Add backslash here
+
+        return $result ? (float)$result['percentage'] : 0;
+    }
+
     public function update(Request $request, $id)
     {
         $purchaseorder = PurchaseOrder::find($id);
@@ -1338,8 +1359,41 @@ class PurchaseOrderController extends Controller
             }
 
             // fo0011 total_cost
+            // if ($purchaseorder->purchase_method != 'Cash') {
+            //     $salesOrder->total_cost = round($purchaseorder->sum_docdepoth + $salesOrder->total_monthly_rental + $salesOrder->sales_final_payment + $salesOrder->penalty_early_settlement + $purchaseorder->final_fees + ($purchaseorder->vehicle_tracking * 11), 2);
+            // } else {
+            //     $salesOrder->total_cost = round($purchaseorder->price_otr, 2);
+            // }
+
             if ($purchaseorder->purchase_method != 'Cash') {
-                $salesOrder->total_cost = round($purchaseorder->sum_docdepoth + $salesOrder->total_monthly_rental + $salesOrder->sales_final_payment + $salesOrder->penalty_early_settlement + $purchaseorder->final_fees + ($purchaseorder->vehicle_tracking * 11), 2);
+
+                $financing = $purchaseorder->price_otr - $purchaseorder->hp_deposit_amount;
+                $total = 0;
+
+                $pdo = DB::connection()->getPdo();
+                $currentDate = new \DateTime($purchaseorder->hire_purchase_starting_date);
+
+                for ($i = 1; $i <= $purchaseorder->hp_term; $i++) {
+
+                    $baseRate = $this->getBaseInterest($currentDate, $pdo);
+
+                    $interest = ($financing * $purchaseorder->hp_interest_per_annum / 100) / 12;
+                    $bankBase = ($financing * $baseRate / 100) / 12;
+
+                    $monthly = $purchaseorder->monthly_payment + $interest + $bankBase;
+
+                    $total += $monthly;
+
+                    $currentDate->modify('+1 month');
+                }
+
+                $salesOrder->total_cost = round(
+                    $total +
+                    $purchaseorder->final_payment +
+                    $purchaseorder->hp_deposit_amount +
+                    $purchaseorder->documentation_fees_pu +
+                    $purchaseorder->final_fees,2);
+
             } else {
                 $salesOrder->total_cost = round($purchaseorder->price_otr, 2);
             }
