@@ -659,8 +659,8 @@ class PurchaseOrderController extends Controller
             return response([
                 'message' => 'Retrieve All Success',
                 'data'    => [
-                    'sum_total_cost'   => $result1->sum_total_cost ?? null,
-                    'sum_total_cost_live' => $result2->sum_total_cost_live ?? null,
+                    'sum_total_cost'   => $result1->sum_total_cost ?? null, //projected_total_cost
+                    'current_total_cost' => $result2->sum_total_cost_live ?? null,
                 ]
             ], 200);
         }
