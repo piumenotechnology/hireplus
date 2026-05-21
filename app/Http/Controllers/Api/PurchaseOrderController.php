@@ -373,7 +373,7 @@ class PurchaseOrderController extends Controller
 
     public function listTotalCost($id)
     {
-        $sql = "
+        $sql1 = "
             WITH RECURSIVE
             effective_terms AS (
                 SELECT
@@ -494,8 +494,8 @@ class PurchaseOrderController extends Controller
                     + (MAX(cwb.monthly_payment) * cwb.effective_term)
                     + SUM(cwb.interest)
                     + SUM((cwb.financing * IFNULL(cwb.base_rate, 0) / 100.0) / 12)
-                    + MAX(cwb.documentation_fees_pu)   
-                    + MAX(cwb.documentation_fees_pu)  
+                    + MAX(cwb.documentation_fees_pu)
+                    + MAX(cwb.documentation_fees_pu)
                     + MAX(cwb.final_payment)
                 , 2) AS sum_total_cost
             FROM calc_with_base cwb
@@ -511,12 +511,157 @@ class PurchaseOrderController extends Controller
                 cwb.hp_interest_per_annum
         ";
 
-        $result = DB::selectOne($sql, [$id]);
+        $sql2 = "
+            WITH RECURSIVE
+            effective_terms AS (
+                SELECT
+                    po.id                                                       AS po_id,
+                    po.hp_term,
+                    po.hire_purchase_starting_date,
+                    (
+                        SELECT so2.next_step_status_sales
+                        FROM sales_orders so2
+                        WHERE so2.id_purchase_order = po.id
+                        ORDER BY so2.id DESC
+                        LIMIT 1
+                    )                                                           AS last_status,
+                    LEAST(
+                        po.hp_term,
+                        CASE
+                            WHEN (
+                                SELECT so2.next_step_status_sales
+                                FROM sales_orders so2
+                                WHERE so2.id_purchase_order = po.id
+                                ORDER BY so2.id DESC
+                                LIMIT 1
+                            ) = 'Innactive'
+                                THEN TIMESTAMPDIFF(MONTH, po.hire_purchase_starting_date, CURDATE()) + 1
+                            WHEN (
+                                SELECT so2.next_step_status_sales
+                                FROM sales_orders so2
+                                WHERE so2.id_purchase_order = po.id
+                                ORDER BY so2.id DESC
+                                LIMIT 1
+                            ) = 'Sold'
+                                THEN TIMESTAMPDIFF(
+                                    MONTH,
+                                    po.hire_purchase_starting_date,
+                                    DATE_ADD(
+                                        (
+                                            SELECT so2.contract_start_date
+                                            FROM sales_orders so2
+                                            WHERE so2.id_purchase_order = po.id
+                                            ORDER BY so2.id DESC
+                                            LIMIT 1
+                                        ),
+                                        INTERVAL (
+                                            SELECT so2.margin_term
+                                            FROM sales_orders so2
+                                            WHERE so2.id_purchase_order = po.id
+                                            ORDER BY so2.id DESC
+                                            LIMIT 1
+                                        ) MONTH
+                                    )
+                                )
+                            ELSE
+                                TIMESTAMPDIFF(MONTH, po.hire_purchase_starting_date, CURDATE())
+                        END
+                    )                                                           AS effective_term
+                FROM purchase_orders po
+                WHERE po.purchase_method != 'Cash'
+            ),
 
-        if ($result !== null) {
+            other_costs_sum AS (
+                SELECT
+                    id_purchase_order                                           AS po_id,
+                    SUM(amount_oc)                                              AS total_other_cost
+                FROM other_costs
+                GROUP BY id_purchase_order
+            ),
+
+            seq AS (
+                SELECT
+                    po.id                                                       AS po_id,
+                    po.vehicle_registration,
+                    1                                                           AS month_num,
+                    et.effective_term,
+                    et.last_status,
+                    po.hp_term,
+                    po.price_otr,
+                    po.hp_deposit_amount,
+                    po.hp_interest_per_annum,
+                    po.monthly_payment,
+                    po.final_payment,
+                    po.documentation_fees_pu,
+                    po.final_fees,
+                    po.hire_purchase_starting_date,
+                    (po.price_otr - po.hp_deposit_amount)                       AS financing
+                FROM purchase_orders po
+                INNER JOIN effective_terms et ON et.po_id = po.id
+                WHERE po.purchase_method != 'Cash'
+                AND et.effective_term > 0
+
+                UNION ALL
+
+                SELECT
+                    po_id, vehicle_registration, month_num + 1,
+                    effective_term, last_status, hp_term,
+                    price_otr, hp_deposit_amount, hp_interest_per_annum,
+                    monthly_payment, final_payment, documentation_fees_pu,
+                    final_fees, hire_purchase_starting_date, financing
+                FROM seq
+                WHERE month_num < effective_term
+            ),
+
+            calc AS (
+                SELECT
+                    s.*,
+                    DATE_ADD(s.hire_purchase_starting_date, INTERVAL (s.month_num - 1) MONTH) AS calc_date,
+                    (s.financing * s.hp_interest_per_annum / 100.0) / 12                       AS interest
+                FROM seq s
+            ),
+
+            calc_with_base AS (
+                SELECT
+                    c.*,
+                    (
+                        SELECT bi.percentage
+                        FROM base_interests bi
+                        WHERE bi.start_date <= c.calc_date
+                        ORDER BY bi.start_date DESC
+                        LIMIT 1
+                    )                                                           AS base_rate
+                FROM calc c
+            )
+
+            SELECT
+                ROUND(
+                    MAX(cwb.hp_deposit_amount)
+                    + MAX(cwb.monthly_payment) * MAX(cwb.effective_term)
+                    + ROUND(SUM(cwb.interest), 2)
+                    + MAX(cwb.documentation_fees_pu)
+                    + MAX(cwb.documentation_fees_pu)
+                    + ROUND(SUM((cwb.financing * IFNULL(cwb.base_rate, 0) / 100.0) / 12), 2)
+                    + MAX(cwb.final_payment)
+                , 2)                                                            AS sum_total_cost_live
+            FROM calc_with_base cwb
+            LEFT JOIN other_costs_sum oc ON oc.po_id = cwb.po_id
+            WHERE cwb.po_id = ?
+            GROUP BY
+                cwb.po_id,
+                cwb.vehicle_registration
+        ";
+
+        $result1 = DB::selectOne($sql1, [$id]);
+        $result2 = DB::selectOne($sql2, [$id]);
+
+        if ($result1 !== null || $result2 !== null) {
             return response([
                 'message' => 'Retrieve All Success',
-                'data'    => $result
+                'data'    => [
+                    'sum_total_cost'   => $result1->sum_total_cost ?? null,
+                    'sum_total_cost_live' => $result2->sum_total_cost_live ?? null,
+                ]
             ], 200);
         }
 
