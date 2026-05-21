@@ -385,14 +385,6 @@ class SalesOrderController extends Controller
         }
 
       //fo0011 total_cost
-        // if($purchaseorder->purchase_method != 'Cash'){
-        //     $salesorder->total_cost = round($purchaseorder->sum_docdepoth + $salesorder->total_monthly_rental + $salesorder->sales_final_payment + $salesorder->penalty_early_settlement  + $purchaseorder->final_fees +  ($purchaseorder->vehicle_tracking * 11),2);
-        //     $salesorder->save();
-        // } else {
-        //     $salesorder->total_cost = round($purchaseorder->price_otr,2);
-        //     $salesorder->save();
-        // }
-
         if ($purchaseorder->purchase_method != 'Cash') {
 
             $financing = $purchaseorder->price_otr - $purchaseorder->hp_deposit_amount;
@@ -761,10 +753,10 @@ class SalesOrderController extends Controller
         // $salesorder->save();
 
         if($salesorder->save()){
-            // $update = PurchaseOrder::where('id',$oldSalesOrder->id_purchase_order)
-            //             ->update(['status_next_step' => 'Available']);
-            $update = PurchaseOrder::where('id',$oldSalesOrder->id_purchase_order)
-                        ->update(['id_sales_order' => null]);
+            if ((int)$oldSalesOrder->id_purchase_order !== (int)$updateData['id_purchase_order']) {
+                PurchaseOrder::where('id', $oldSalesOrder->id_purchase_order)
+                    ->update(['id_sales_order' => null]);
+            }
 
             return response([
                 'message' => 'Update Sales Order Success',
@@ -776,6 +768,63 @@ class SalesOrderController extends Controller
             'message' => 'Update Sales Order Failed',
             'data' => null
         ],400);
+    }
+
+    public function recalculateAll(Request $request)
+    {
+        set_time_limit(0);
+
+        $rows = DB::table('sales_orders')
+            ->join('purchase_orders', 'purchase_orders.id', '=', 'sales_orders.id_purchase_order')
+            ->select('sales_orders.*', 'purchase_orders.residual_value')
+            ->orderBy('sales_orders.id')
+            ->get();
+
+        $ok = 0;
+        $failed = [];
+
+        foreach ($rows as $row) {
+            $payload = [
+                'id_purchase_order'      => $row->id_purchase_order,
+                'type'                   => $row->type,
+                'agreement_number'       => $row->agreement_number,
+                'cust_name'              => $row->cust_name,
+                'contract_start_date'    => $row->contract_start_date ? substr($row->contract_start_date, 0, 10) : null,
+                'annual_mileage'         => $row->annual_mileage,
+                'term_months'            => $row->term_months,
+                'initial_rental'         => $row->initial_rental,
+                'documentation_fees'     => $row->documentation_fees,
+                'monthly_rental'         => $row->monthly_rental,
+                'other_income'           => $row->other_income,
+                'margin_term'            => $row->margin_term,
+                'next_step_status_sales' => $row->next_step_status_sales,
+                'residual_value'         => $row->residual_value,
+            ];
+
+            $subRequest = new Request();
+            $subRequest->replace($payload);
+
+            try {
+                $resp = $this->update($subRequest, $row->id);
+                if ($resp->getStatusCode() === 200) {
+                    $ok++;
+                } else {
+                    $failed[] = ['id' => $row->id, 'status' => $resp->getStatusCode(), 'body' => json_decode($resp->getContent(), true)];
+                }
+            } catch (\Throwable $e) {
+                $failed[] = ['id' => $row->id, 'error' => $e->getMessage()];
+            }
+        }
+
+        return response([
+            'message' => 'Recalculate Sales Orders Complete',
+            'data' => [
+                'total'        => count($rows),
+                'ok'           => $ok,
+                'failed_count' => count($failed),
+                'failed'       => $failed,
+            ],
+        ], 200);
     }
 
 }

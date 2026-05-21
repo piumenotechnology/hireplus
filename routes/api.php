@@ -73,6 +73,7 @@ Route::get('showvehiclenumberinothercost', 'App\Http\Controllers\Api\PurchaseOrd
 Route::get('showvehiclenumberinotherincome', 'App\Http\Controllers\Api\PurchaseOrderController@showVehicleNumberInOtherIncome');
 
 //SalesOrderController
+Route::post('salesorder/recalculate-all', 'App\Http\Controllers\Api\SalesOrderController@recalculateAll');
 Route::get('salesorder/{id}', 'App\Http\Controllers\Api\SalesOrderController@show');
 Route::post('salesorder', 'App\Http\Controllers\Api\SalesOrderController@store');
 Route::put('salesorder/{id}', 'App\Http\Controllers\Api\SalesOrderController@update');

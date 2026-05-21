@@ -16,8 +16,6 @@ use App\Models\SalesOrder;
 use App\Models\VehicleSold;
 use App\Models\BaseInterest;
 use App\Models\BaseInterestDetail;
-use PDO;
-
 class PurchaseOrderController extends Controller
 {
     public function index()
@@ -236,59 +234,6 @@ class PurchaseOrderController extends Controller
         ], 400);
     }
 
-    // public function listVehicleInVehicleCard($id)
-    // {
-
-    //     //$salesByPurchaseId = SalesOrder::whereRaw('id_purchase_order = '.$id)->first();
-
-    //     $purchaseorder = DB::table('purchase_orders')
-    //         ->leftJoin('sales_orders', 'purchase_orders.id', '=', 'sales_orders.id_purchase_order')
-    //         ->leftJoin('rehiring_orders', 'sales_orders.id', '=', 'rehiring_orders.id_sales_order')
-    //         ->leftJoin('vehicle_solds', 'sales_orders.id', '=', 'vehicle_solds.id_sales_order')
-    //         ->leftJoin('other_incomes', 'sales_orders.id', '=', 'other_incomes.id_sales_order')
-    //         ->selectRaw('purchase_orders.*, sales_orders.*, rehiring_orders.*, vehicle_solds.*, other_incomes.amount_oi')
-    //         ->whereRaw('purchase_orders.id = ' . $id)
-    //         // ->groupBy('agreement_number')
-    //         //->sum('total_income_new')
-    //         ->get();
-
-    //     //delete this if you want to see the result
-    //     // foreach ($purchaseorder as $po) {
-    //     //     if ($po->status_next_step == 'Sold'){
-    //     //         $po -> total_income = round($po->first_payment + ($po->monthly_rental * ($po->margin_term)) + $po->sold_price,2);
-    //     //     } else {
-    //     //         $po -> total_income = round($po->first_payment + ($po->monthly_rental * ($po->margin_term)),2);
-    //     //     }
-    //     // }
-
-    //     foreach ($purchaseorder as $po) {
-    //     // Add other_income from amount_oi
-    //     $po->other_income = $po->amount_oi;
-
-    //     // Calculate total income
-    //     if ($po->status_next_step === 'Sold') {
-    //         $po->total_income = round(
-    //             ($po->first_payment ?? 0) + (($po->monthly_rental ?? 0) * ($po->margin_term ?? 0)) + ($po->sold_price ?? 0) + ($po->other_income ?? 0), 2
-    //         );
-    //     } else {
-    //         $po->total_income = round(
-    //             ($po->first_payment ?? 0) + (($po->monthly_rental ?? 0) * ($po->margin_term ?? 0)) + ($po->other_income ?? 0), 2
-    //         );
-    //     }
-    // }
-    //     if (count($purchaseorder) > 0) {
-    //         return response([
-    //             'message' => 'Retrieve All Success',
-    //             'data' => $purchaseorder
-    //         ], 200);
-    //     }
-
-    //     return response([
-    //         'message' => 'Empty',
-    //         'data' => null
-    //     ], 400);
-    // }
-
     public function listVehicleInVehicleCard($id)
     {
         $purchaseorder = DB::table('purchase_orders')
@@ -428,34 +373,161 @@ class PurchaseOrderController extends Controller
 
     public function listTotalCost($id)
     {
-        $purchaseorder = DB::table('sales_orders')
-            ->join('purchase_orders', 'purchase_orders.id', '=', 'sales_orders.id_purchase_order')
-            ->selectRaw('round(AVG(total_cost),2) as sum_total_cost')
-            ->whereRaw('purchase_orders.id = ' . $id)
-            ->first();
+        $sql = "
+            WITH RECURSIVE
+            effective_terms AS (
+                SELECT
+                    po.id                                               AS po_id,
+                    po.hp_term,
+                    COALESCE(SUM(so.margin_term), 0)                   AS total_margin_term,
+                    (
+                        SELECT so2.next_step_status_sales
+                        FROM sales_orders so2
+                        WHERE so2.id_purchase_order = po.id
+                        ORDER BY so2.id DESC
+                        LIMIT 1
+                    )                                                   AS last_next_step_status,
+                    LEAST(
+                        po.hp_term,
+                        CASE
+                            WHEN (
+                                SELECT so2.next_step_status_sales
+                                FROM sales_orders so2
+                                WHERE so2.id_purchase_order = po.id
+                                ORDER BY so2.id DESC
+                                LIMIT 1
+                            ) = 'Innactive'
+                            THEN TIMESTAMPDIFF(MONTH, po.hire_purchase_starting_date, CURDATE()) + 1
+                            ELSE
+                                TIMESTAMPDIFF(
+                                    MONTH,
+                                    po.hire_purchase_starting_date,
+                                    DATE_ADD(
+                                        (SELECT so2.contract_start_date
+                                        FROM sales_orders so2
+                                        WHERE so2.id_purchase_order = po.id
+                                        ORDER BY so2.id DESC
+                                        LIMIT 1),
+                                        INTERVAL
+                                        (SELECT so2.margin_term
+                                        FROM sales_orders so2
+                                        WHERE so2.id_purchase_order = po.id
+                                        ORDER BY so2.id DESC
+                                        LIMIT 1)
+                                        MONTH
+                                    )
+                                )
+                        END
+                    )                                                   AS effective_term
+                FROM purchase_orders po
+                LEFT JOIN sales_orders so ON so.id_purchase_order = po.id
+                WHERE po.purchase_method != 'Cash'
+                GROUP BY po.id, po.hp_term, po.hire_purchase_starting_date
+            ),
 
-        if ($purchaseorder != null) {
+            other_costs_total AS (
+                SELECT
+                    oc.id_purchase_order                                AS po_id,
+                    COALESCE(SUM(oc.amount_oc), 0)                     AS total_other_cost
+                FROM other_costs oc
+                GROUP BY oc.id_purchase_order
+            ),
+
+            seq AS (
+                SELECT
+                    po.id                                               AS po_id,
+                    po.vehicle_registration,
+                    1                                                   AS month_num,
+                    et.effective_term,
+                    et.last_next_step_status,
+                    po.hp_term,
+                    po.price_otr,
+                    po.hp_deposit_amount,
+                    po.hp_interest_per_annum,
+                    po.monthly_payment,
+                    po.final_payment,
+                    po.documentation_fees_pu,
+                    po.final_fees,
+                    po.hire_purchase_starting_date,
+                    (po.price_otr - po.hp_deposit_amount)               AS financing
+                FROM purchase_orders po
+                INNER JOIN effective_terms et ON et.po_id = po.id
+                WHERE po.purchase_method != 'Cash'
+                AND et.effective_term > 0
+
+                UNION ALL
+
+                SELECT
+                    po_id, vehicle_registration, month_num + 1,
+                    effective_term, last_next_step_status, hp_term,
+                    price_otr, hp_deposit_amount, hp_interest_per_annum,
+                    monthly_payment, final_payment, documentation_fees_pu,
+                    final_fees, hire_purchase_starting_date, financing
+                FROM seq
+                WHERE month_num < effective_term
+            ),
+
+            calc AS (
+                SELECT
+                    s.*,
+                    DATE_ADD(s.hire_purchase_starting_date, INTERVAL (s.month_num - 1) MONTH) AS calc_date,
+                    (s.financing * s.hp_interest_per_annum / 100.0) / 12                       AS interest
+                FROM seq s
+            ),
+
+            calc_with_base AS (
+                SELECT
+                    c.*,
+                    (
+                        SELECT bi.percentage
+                        FROM base_interests bi
+                        WHERE bi.start_date <= c.calc_date
+                        ORDER BY bi.start_date DESC
+                        LIMIT 1
+                    ) AS base_rate
+                FROM calc c
+            )
+
+            SELECT
+                ROUND(
+                    MAX(cwb.hp_deposit_amount)
+                    + (MAX(cwb.monthly_payment) * cwb.effective_term)
+                    + SUM(cwb.interest)
+                    + SUM((cwb.financing * IFNULL(cwb.base_rate, 0) / 100.0) / 12)
+                    + MAX(cwb.documentation_fees_pu)   
+                    + MAX(cwb.documentation_fees_pu)  
+                    + MAX(cwb.final_payment)
+                , 2) AS sum_total_cost
+            FROM calc_with_base cwb
+            LEFT JOIN other_costs_total oct ON oct.po_id = cwb.po_id
+            WHERE cwb.po_id = ?
+            GROUP BY
+                cwb.po_id,
+                cwb.vehicle_registration,
+                cwb.hp_term,
+                cwb.effective_term,
+                cwb.last_next_step_status,
+                cwb.hire_purchase_starting_date,
+                cwb.hp_interest_per_annum
+        ";
+
+        $result = DB::selectOne($sql, [$id]);
+
+        if ($result !== null) {
             return response([
                 'message' => 'Retrieve All Success',
-                'data' => $purchaseorder
+                'data'    => $result
             ], 200);
         }
 
         return response([
             'message' => 'Empty',
-            'data' => null
+            'data'    => null
         ], 400);
     }
 
     public function listRentalIncome($id)
     {   
-        //old queries
-        // $purchaseorder = DB::table('sales_orders')
-        //     ->join('purchase_orders', 'purchase_orders.id', '=', 'sales_orders.id_purchase_order')
-        //     ->selectRaw('round(SUM(rental_income),2) as sum_rental_income')
-        //     ->whereRaw('purchase_orders.id = ' . $id)
-        //     ->first();
-
         $purchaseorder = DB::table('sales_orders')
         ->join('purchase_orders', 'purchase_orders.id', '=', 'sales_orders.id_purchase_order')
         ->selectRaw("
@@ -538,19 +610,6 @@ class PurchaseOrderController extends Controller
             'sum_other_cost' => $sumOtherCost,
             'data' => $othercost,
         ]);
-
-        // if ($othercost->isNotEmpty()) {
-        //     return response([
-        //         'message' => 'Retrieve All Success',
-        //         'sum_other_cost' => $sumOtherCost,
-        //         'data' => $othercost
-        //     ], 200);
-        // } else {
-        //     return response([
-        //         'message' => 'No data found',
-        //         'data' => null
-        //     ], 404);
-        // }
     }
 
     public function listSoldPrice($id)
@@ -598,13 +657,6 @@ class PurchaseOrderController extends Controller
 
     public function availableStock(Request $request)
     {
-
-        // $purchaseorder = DB::table('purchase_orders')
-        //     ->select('purchase_orders.id', 'purchase_orders.vehicle_registration', 'purchase_orders.vehicle_manufactur', 'purchase_orders.vehicle_model', 'purchase_orders.colour', 'purchase_orders.vehicle_variant', 'purchase_orders.min_contract_price_satu', 'purchase_orders.min_contract_price_dua', 'purchase_orders.stock_status', 'purchase_orders.status_next_step', 'purchase_orders.eta')
-        //     // ->whereRaw('status_next_step != "Sold"');
-        //     // ->whereRaw('stock_status IS NOT NULL');
-        //     ->whereRaw('purchase_orders.status_next_step = "Available"');
-
         $purchaseorder = DB::table('purchase_orders')
         ->leftJoinSub(
             DB::table('sales_orders')
@@ -942,48 +994,6 @@ class PurchaseOrderController extends Controller
         ], 400);
     }
 
-    // public function showAgreementNumber($id){
-    //     $purchaseorder = DB::table('purchase_orders')
-    //                 ->join('sales_orders','sales_orders.id','=','purchase_orders.id_sales_order')
-    //                 ->select('purchase_orders.*','sales_orders.agreement_no')
-    //                 ->get();
-
-    //     if(count($purchaseorder) > 0){
-    //         return response([
-    //             'message' => 'Retrieve All Success',
-    //             'data' => $purchaseorder
-    //         ],200);
-    //     }
-
-    //     return response([
-    //         'message' => 'Empty',
-    //         'data' => null
-    //     ],400);
-    // }
-
-
-
-    //  public function showVehicleRehiringOrder($id){
-    //      $purchaseorder = DB::table('purchase_orders')
-    //                      ->join('sales_orders','sales_orders.id','=','purchase_orders.id_sales_order')
-    //                      ->join('rehiring_orders','rehiring_orders.id','=','purchase_orders.id_rehiring_order')
-    //                      ->select('purchase_orders.*','sales_orders.agreement_no','rehiring_orders.next_step')
-    //                      ->whereRaw('purchase_orders.id = "'.$id.'"')
-    //                      ->get();
-
-    //      if(count($purchaseorder) > 0){
-    //          return response([
-    //              'message' => 'Retrieve All Success',
-    //              'data' => $purchaseorder
-    //          ],200);
-    //      }
-
-    //      return response([
-    //          'message' => 'Empty',
-    //          'data' => null
-    //      ],400);
-    //  }
-
     public function store(Request $request)
     {
         $storeData = $request->all();
@@ -1154,25 +1164,6 @@ class PurchaseOrderController extends Controller
             'message' => 'Delete Purchase Order Failed',
             'data' => null,
         ], 400);
-    }
-
-    function getBaseInterest($date, $pdo)
-    {
-        $stmt = $pdo->prepare("
-            SELECT percentage
-            FROM base_interests
-            WHERE start_date <= :date
-            ORDER BY start_date DESC
-            LIMIT 1
-        ");
-
-        $stmt->execute([
-            ':date' => $date->format('Y-m-d')
-        ]);
-
-        $result = $stmt->fetch(\PDO::FETCH_ASSOC);  // Add backslash here
-
-        return $result ? (float)$result['percentage'] : 0;
     }
 
     public function update(Request $request, $id)
@@ -1359,41 +1350,8 @@ class PurchaseOrderController extends Controller
             }
 
             // fo0011 total_cost
-            // if ($purchaseorder->purchase_method != 'Cash') {
-            //     $salesOrder->total_cost = round($purchaseorder->sum_docdepoth + $salesOrder->total_monthly_rental + $salesOrder->sales_final_payment + $salesOrder->penalty_early_settlement + $purchaseorder->final_fees + ($purchaseorder->vehicle_tracking * 11), 2);
-            // } else {
-            //     $salesOrder->total_cost = round($purchaseorder->price_otr, 2);
-            // }
-
             if ($purchaseorder->purchase_method != 'Cash') {
-
-                $financing = $purchaseorder->price_otr - $purchaseorder->hp_deposit_amount;
-                $total = 0;
-
-                $pdo = DB::connection()->getPdo();
-                $currentDate = new \DateTime($purchaseorder->hire_purchase_starting_date);
-
-                for ($i = 1; $i <= $purchaseorder->hp_term; $i++) {
-
-                    $baseRate = $this->getBaseInterest($currentDate, $pdo);
-
-                    $interest = ($financing * $purchaseorder->hp_interest_per_annum / 100) / 12;
-                    $bankBase = ($financing * $baseRate / 100) / 12;
-
-                    $monthly = $purchaseorder->monthly_payment + $interest + $bankBase;
-
-                    $total += $monthly;
-
-                    $currentDate->modify('+1 month');
-                }
-
-                $salesOrder->total_cost = round(
-                    $total +
-                    $purchaseorder->final_payment +
-                    $purchaseorder->hp_deposit_amount +
-                    $purchaseorder->documentation_fees_pu +
-                    $purchaseorder->final_fees,2);
-
+                $salesOrder->total_cost = round($purchaseorder->sum_docdepoth + $salesOrder->total_monthly_rental + $salesOrder->sales_final_payment + $salesOrder->penalty_early_settlement + $purchaseorder->final_fees + ($purchaseorder->vehicle_tracking * 11), 2);
             } else {
                 $salesOrder->total_cost = round($purchaseorder->price_otr, 2);
             }
@@ -1423,35 +1381,22 @@ class PurchaseOrderController extends Controller
 
     public function showDashboard($date1, $date2)
     {
-        $salesOrders = DB::table('sales_orders as so')
-            ->join('purchase_orders as po', 'so.id_purchase_order', '=', 'po.id')
-            ->leftJoin(DB::raw("(SELECT id_purchase_order,
-                                SUM((monthly_rental * term_months) + (initial_rental + documentation_fees + other_income)) AS New_Total_income
-                                FROM sales_orders
-                                GROUP BY id_purchase_order) as income"),
-                                'so.id_purchase_order', '=', 'income.id_purchase_order')
-            ->select(
-                'so.*',
-                'po.*',
-                'so.id_purchase_order as newid',
-                'income.New_Total_income',
-                DB::raw("DATE_ADD(so.contract_start_date, INTERVAL so.term_months  MONTH) AS date_after_duration_income"),
-                DB::raw("DATE_ADD(po.hire_purchase_starting_date, INTERVAL COALESCE(po.hp_term, 0) MONTH) AS date_after_duration_cost"),
-            )
-            ->whereRaw('DATE_ADD(so.contract_start_date, INTERVAL (so.term_months - 1) MONTH) >= ?', [$date1])
-            ->whereRaw('so.contract_start_date <= ?', [$date2])
-            ->orderBy('po.vehicle_registration', 'ASC')
-            ->get();
-
         $purchaseorder = DB::table('purchase_orders')
+            ->join('sales_orders as so', 'purchase_orders.id', '=', 'so.id_purchase_order')
+            ->leftJoin(DB::raw("(SELECT id_purchase_order, SUM(amount_oi) as total_oi
+                                FROM other_incomes
+                                GROUP BY id_purchase_order) as oti"),
+                                'oti.id_purchase_order', '=', 'purchase_orders.id')   // ✅ Pre-aggregated subquery
             ->leftJoin('vehicle_solds as vs', 'vs.id_purchase_order', '=', 'purchase_orders.id')
             ->select(
                 'purchase_orders.*',
                 'vs.*',
+                'oti.total_oi as total_other_income_rental',                                            // ✅ Already summed, no SUM() needed
+                DB::raw('SUM(so.rental_income) as total_rental_income'),
                 'purchase_orders.id as purchase_id',
                 DB::raw("DATE_ADD(purchase_orders.hire_purchase_starting_date, INTERVAL COALESCE(purchase_orders.hp_term, 0) MONTH) AS date_after_duration_cost"),
                 DB::raw("(SELECT COUNT(*) FROM purchase_orders WHERE status_next_step = 'Available') AS available_cars_count"),
-                DB::raw("(SELECT SUM((regular_monthly_payment + vehicle_tracking) * hp_term ) FROM `purchase_orders` WHERE status_next_step = 'Available') AS avaliable_cars_cost"),
+                DB::raw("(SELECT SUM((regular_monthly_payment + vehicle_tracking) * hp_term) FROM purchase_orders WHERE status_next_step = 'Available') AS available_cars_cost"),
                 DB::raw('COALESCE((SELECT SUM(base_interest_details.total_base_interest)
                         FROM base_interest_details
                         WHERE base_interest_details.id_purchase_order = purchase_orders.id), 0)
@@ -1459,11 +1404,51 @@ class PurchaseOrderController extends Controller
             )
             ->whereRaw('DATE_ADD(purchase_orders.hire_purchase_starting_date, INTERVAL COALESCE(purchase_orders.hp_term - 1, 0) MONTH) >= ?', [$date1])
             ->whereRaw('purchase_orders.hire_purchase_starting_date <= ?', [$date2])
+            ->groupBy(
+                'purchase_orders.id',
+                'vs.id',
+                'oti.total_oi',                                                       // ✅ Group by the pre-aggregated value
+                'purchase_orders.hire_purchase_starting_date',
+                'purchase_orders.hp_term',
+                'purchase_orders.status_next_step',
+                'purchase_orders.regular_monthly_payment',
+                'purchase_orders.vehicle_tracking',
+            )
             ->orderBy('purchase_orders.id', 'ASC')
             ->get();
 
-
-
+        $salesOrders = DB::table('sales_orders as so')
+            ->join('purchase_orders as po', 'so.id_purchase_order', '=', 'po.id')
+            ->leftJoin(DB::raw("(SELECT id_purchase_order,
+                                SUM((monthly_rental * term_months) + (initial_rental + documentation_fees + other_income)) AS New_Total_income
+                                FROM sales_orders
+                                GROUP BY id_purchase_order) as income"),
+                                'so.id_purchase_order', '=', 'income.id_purchase_order')
+            ->leftJoin('other_incomes as oti', 'so.id', '=', 'oti.id_sales_order')
+            ->select(
+                'so.*',
+                'po.*',
+                DB::raw('SUM(oti.amount_oi) as total_other_income_rental'),  // ✅ Wrapped in DB::raw()
+                'so.id_purchase_order as newid',
+                'income.New_Total_income',
+                DB::raw("DATE_ADD(so.contract_start_date, INTERVAL so.term_months MONTH) AS date_after_duration_income"),
+                DB::raw("DATE_ADD(po.hire_purchase_starting_date, INTERVAL COALESCE(po.hp_term, 0) MONTH) AS date_after_duration_cost"),
+            )
+            ->whereRaw('DATE_ADD(so.contract_start_date, INTERVAL (so.term_months - 1) MONTH) >= ?', [$date1])
+            ->whereRaw('so.contract_start_date <= ?', [$date2])
+            ->groupBy(                                     // ✅ Added groupBy
+                'so.id',
+                'po.id',
+                'so.id_purchase_order',
+                'income.New_Total_income',
+                'so.contract_start_date',
+                'so.term_months',
+                'po.hire_purchase_starting_date',
+                'po.hp_term',
+                'po.vehicle_registration'
+            )
+            ->orderBy('po.vehicle_registration', 'ASC')
+            ->get();
 
         $modifiedData = [];
         $rentalData = [];
@@ -1570,8 +1555,9 @@ class PurchaseOrderController extends Controller
                 'monthly_rental' => round($item->monthly_rental, 2),
                 'rental_income' => round($monthlyIncome,2),
                 // 'total_income' => round($item->total_income,2),
-                // 'total_rental' => round($item->rental_income,2),
-                // 'amount_oi' => $amount_oi,
+                'total_rental' => round($item->rental_income,2),
+                'other_income' => round($item->total_other_income_rental, 2),
+                'residual' => round($item->residual_value,2)
                 // 'income' => $income,
                 // 'purchased_method' => $item->purchase_method ,
 
@@ -1662,13 +1648,24 @@ class PurchaseOrderController extends Controller
                 "status_vehicle" => $leasing->status_next_step,
                 "sold_date" => $leasing->vehicle_sold_date,
                 "count_month" => $countDatePaid,
-                "regular_monthly_payment" => round($subTotal, 2),
-                "hp_payment" => round($cost, 2),
-                "base_interest" => round($leasing->total_base_interest ?? 0, 2),
-                "residual_value" => round($data_residual, 2),
+                "regular_monthly_payment" => $subTotal,
+                "monthly_payment" => $leasing->monthly_payment,
+                "hp_payment" => $cost,
+                "base_interest" => $leasing->total_base_interest,
+                // "residual_value" => round($data_residual, 2),
+                "final_payment" => $leasing->final_payment,
+                "otr" => $leasing->price_otr,
+                "hp_finance_provider" => $leasing->hp_finance_provider,
+                "hp_interest_per_annum" => $leasing->hp_interest_per_annum,
+                "hp_deposit_amount" => $leasing->hp_deposit_amount,
+                "hp_term" => $leasing->hp_term,
+                "residual_value" => $leasing->residual_value,
+                "total_rental_income" => $leasing->total_rental_income,
+                "total_other_income" => $leasing->total_other_income_rental
+                
 
                 // "forrecasting_cost" => round($cek_total_cost, 2),
-                // "available_cost" => $leasing->avaliable_cars_cost,
+                // "available_cost" => $leasing->available_cars_cost,
                 // "date" => $date_modif_cost //debuging
             ];
         }
@@ -1677,12 +1674,12 @@ class PurchaseOrderController extends Controller
         $margin = $rental - $total_cost;
         $profitMargin = $rental > 0 ? round(($margin / $rental) * 100, 2) : 0;
         $total_vehicle = $countVehicleIncome + $leasing->available_cars_count;
-        $projected_margin = $sum_all_projected_income - ($projected_cost_in_rental + $leasing->avaliable_cars_cost);
+        $projected_margin = $sum_all_projected_income - ($projected_cost_in_rental + $leasing->available_cars_cost);
         $avg_projected_margin = $projected_margin / $count_contracts;
 
         // $avg_projected_margin = $projected_income / $count_contracts;
-        // $avg_projected_margin = ($projected_income - ($projected_cost + $leasing->avaliable_cars_cost)) / $count_contracts;
-        // $avg_projected_margin = ($projected_income - ($projected_cost_in_rental + $leasing->avaliable_cars_cost)) / $count_contracts; //cost in rental
+        // $avg_projected_margin = ($projected_income - ($projected_cost + $leasing->available_cars_cost)) / $count_contracts;
+        // $avg_projected_margin = ($projected_income - ($projected_cost_in_rental + $leasing->available_cars_cost)) / $count_contracts; //cost in rental
 
         // Final structured data
         $modifiedData = [
@@ -1699,7 +1696,7 @@ class PurchaseOrderController extends Controller
 
             'projected_income' => round($sum_all_projected_income, 2), //all income in range time with same id
             'forecasting_income' => round($projected_income, 2),
-            'forecasting_cost' => round($projected_cost + $leasing->avaliable_cars_cost, 2),
+            'forecasting_cost' => round($projected_cost + $leasing->available_cars_cost, 2),
             'percentage_forecasting' => round((($projected_margin / $sum_all_projected_income) * 100),1),
             'avg_forecasting_income' => round($count_contracts > 0 ? $avg_projected_margin : 0, 1),
 
