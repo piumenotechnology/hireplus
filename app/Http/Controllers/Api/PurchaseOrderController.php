@@ -495,8 +495,9 @@ class PurchaseOrderController extends Controller
                     + SUM(cwb.interest)
                     + SUM((cwb.financing * IFNULL(cwb.base_rate, 0) / 100.0) / 12)
                     + MAX(cwb.documentation_fees_pu)
-                    + MAX(cwb.documentation_fees_pu)
+                    + MAX(cwb.final_fees)
                     + MAX(cwb.final_payment)
+                    + COALESCE(MAX(oct.total_other_cost), 0)
                 , 2) AS sum_total_cost
             FROM calc_with_base cwb
             LEFT JOIN other_costs_total oct ON oct.po_id = cwb.po_id
@@ -639,10 +640,11 @@ class PurchaseOrderController extends Controller
                     MAX(cwb.hp_deposit_amount)
                     + MAX(cwb.monthly_payment) * MAX(cwb.effective_term)
                     + ROUND(SUM(cwb.interest), 2)
-                    + MAX(cwb.documentation_fees_pu)
+                    + MAX(cwb.final_fees)
                     + MAX(cwb.documentation_fees_pu)
                     + ROUND(SUM((cwb.financing * IFNULL(cwb.base_rate, 0) / 100.0) / 12), 2)
                     + MAX(cwb.final_payment)
+                    + COALESCE(MAX(oc.total_other_cost), 0)
                 , 2)                                                            AS sum_total_cost_live
             FROM calc_with_base cwb
             LEFT JOIN other_costs_sum oc ON oc.po_id = cwb.po_id
