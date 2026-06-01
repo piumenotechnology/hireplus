@@ -1674,6 +1674,7 @@ class PurchaseOrderController extends Controller
                 "purchase_method" => $leasing->purchase_method,
                 "status_vehicle" => $leasing->status_next_step,
                 "sold_date" => $leasing->vehicle_sold_date,
+                "sold_price" => $leasing->sold_price,
                 "count_month" => $countDatePaid,
                 "regular_monthly_payment" => $subTotal,
                 "monthly_payment" => $leasing->monthly_payment,
