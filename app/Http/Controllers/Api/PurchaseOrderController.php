@@ -498,6 +498,7 @@ class PurchaseOrderController extends Controller
                     + MAX(cwb.final_fees)
                     + MAX(cwb.final_payment)
                     + COALESCE(MAX(oct.total_other_cost), 0)
+                    + ((cwb.hp_term - cwb.effective_term) * MAX(cwb.monthly_payment)) 
                 , 2) AS sum_total_cost
             FROM calc_with_base cwb
             LEFT JOIN other_costs_total oct ON oct.po_id = cwb.po_id
