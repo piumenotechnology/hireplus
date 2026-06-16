@@ -379,14 +379,14 @@ class PurchaseOrderController extends Controller
     //         ->where('id', $id)
     //         ->select('purchase_method', 'price_otr')
     //         ->first();
-
+ 
     //     if ($po && $po->purchase_method === 'Cash') {
     //         $totalOtherCost = (float) DB::table('other_costs')
     //             ->where('id_purchase_order', $id)
     //             ->sum('amount_oc');
-
+ 
     //         $cashTotalCost = round((float) $po->price_otr + $totalOtherCost, 2);
-
+ 
     //         return response([
     //             'message' => 'Retrieve All Success',
     //             'data'    => [
@@ -395,14 +395,19 @@ class PurchaseOrderController extends Controller
     //             ]
     //         ], 200);
     //     }
-
+ 
+    //     // -------------------------------------------------------------------
+    //     // $sql1 = PROJECTED total cost (full schedule to end of HP term).
+    //     // Cleanup only: removed the dead total_margin_term SUM (and the
+    //     // LEFT JOIN / GROUP BY it required) — it was never used. No change
+    //     // to the computed total.
+    //     // -------------------------------------------------------------------
     //     $sql1 = "
     //         WITH RECURSIVE
     //         effective_terms AS (
     //             SELECT
     //                 po.id                                               AS po_id,
     //                 po.hp_term,
-    //                 COALESCE(SUM(so.margin_term), 0)                   AS total_margin_term,
     //                 (
     //                     SELECT so2.next_step_status_sales
     //                     FROM sales_orders so2
@@ -443,11 +448,9 @@ class PurchaseOrderController extends Controller
     //                     END
     //                 )                                                   AS effective_term
     //             FROM purchase_orders po
-    //             LEFT JOIN sales_orders so ON so.id_purchase_order = po.id
     //             WHERE po.purchase_method != 'Cash'
-    //             GROUP BY po.id, po.hp_term, po.hire_purchase_starting_date
     //         ),
-
+ 
     //         other_costs_total AS (
     //             SELECT
     //                 oc.id_purchase_order                                AS po_id,
@@ -455,7 +458,7 @@ class PurchaseOrderController extends Controller
     //             FROM other_costs oc
     //             GROUP BY oc.id_purchase_order
     //         ),
-
+ 
     //         seq AS (
     //             SELECT
     //                 po.id                                               AS po_id,
@@ -477,9 +480,9 @@ class PurchaseOrderController extends Controller
     //             INNER JOIN effective_terms et ON et.po_id = po.id
     //             WHERE po.purchase_method != 'Cash'
     //             AND et.effective_term > 0
-
+ 
     //             UNION ALL
-
+ 
     //             SELECT
     //                 po_id, vehicle_registration, month_num + 1,
     //                 effective_term, last_next_step_status, hp_term,
@@ -489,7 +492,7 @@ class PurchaseOrderController extends Controller
     //             FROM seq
     //             WHERE month_num < effective_term
     //         ),
-
+ 
     //         calc AS (
     //             SELECT
     //                 s.*,
@@ -497,7 +500,7 @@ class PurchaseOrderController extends Controller
     //                 (s.financing * s.hp_interest_per_annum / 100.0) / 12                       AS interest
     //             FROM seq s
     //         ),
-
+ 
     //         calc_with_base AS (
     //             SELECT
     //                 c.*,
@@ -510,7 +513,7 @@ class PurchaseOrderController extends Controller
     //                 ) AS base_rate
     //             FROM calc c
     //         )
-
+ 
     //         SELECT
     //             ROUND(
     //                 MAX(cwb.hp_deposit_amount)
@@ -521,7 +524,7 @@ class PurchaseOrderController extends Controller
     //                 + MAX(cwb.final_fees)
     //                 + MAX(cwb.final_payment)
     //                 + COALESCE(MAX(oct.total_other_cost), 0)
-    //                 + ((cwb.hp_term - cwb.effective_term) * MAX(cwb.monthly_payment)) 
+    //                 + ((cwb.hp_term - cwb.effective_term) * MAX(cwb.monthly_payment))
     //             , 2) AS sum_total_cost
     //         FROM calc_with_base cwb
     //         LEFT JOIN other_costs_total oct ON oct.po_id = cwb.po_id
@@ -535,7 +538,14 @@ class PurchaseOrderController extends Controller
     //             cwb.hire_purchase_starting_date,
     //             cwb.hp_interest_per_annum
     //     ";
-
+ 
+    //     // -------------------------------------------------------------------
+    //     // $sql2 = LIVE total cost (only payments due as of today).
+    //     // FIX: the ELSE (Hired) branch was missing the "+ 1". A payment due on
+    //     // the HP start date is month 1, so payments due today = elapsed + 1.
+    //     // Without the + 1 the live total dropped the current month's payment
+    //     // (and hid a contract whose first payment had just become due).
+    //     // -------------------------------------------------------------------
     //     $sql2 = "
     //         WITH RECURSIVE
     //         effective_terms AS (
@@ -589,13 +599,13 @@ class PurchaseOrderController extends Controller
     //                                 )
     //                             )
     //                         ELSE
-    //                             TIMESTAMPDIFF(MONTH, po.hire_purchase_starting_date, CURDATE())
+    //                             TIMESTAMPDIFF(MONTH, po.hire_purchase_starting_date, CURDATE()) + 1
     //                     END
     //                 )                                                           AS effective_term
     //             FROM purchase_orders po
     //             WHERE po.purchase_method != 'Cash'
     //         ),
-
+ 
     //         other_costs_sum AS (
     //             SELECT
     //                 id_purchase_order                                           AS po_id,
@@ -603,7 +613,7 @@ class PurchaseOrderController extends Controller
     //             FROM other_costs
     //             GROUP BY id_purchase_order
     //         ),
-
+ 
     //         seq AS (
     //             SELECT
     //                 po.id                                                       AS po_id,
@@ -625,9 +635,9 @@ class PurchaseOrderController extends Controller
     //             INNER JOIN effective_terms et ON et.po_id = po.id
     //             WHERE po.purchase_method != 'Cash'
     //             AND et.effective_term > 0
-
+ 
     //             UNION ALL
-
+ 
     //             SELECT
     //                 po_id, vehicle_registration, month_num + 1,
     //                 effective_term, last_status, hp_term,
@@ -637,7 +647,7 @@ class PurchaseOrderController extends Controller
     //             FROM seq
     //             WHERE month_num < effective_term
     //         ),
-
+ 
     //         calc AS (
     //             SELECT
     //                 s.*,
@@ -645,7 +655,7 @@ class PurchaseOrderController extends Controller
     //                 (s.financing * s.hp_interest_per_annum / 100.0) / 12                       AS interest
     //             FROM seq s
     //         ),
-
+ 
     //         calc_with_base AS (
     //             SELECT
     //                 c.*,
@@ -658,7 +668,7 @@ class PurchaseOrderController extends Controller
     //                 )                                                           AS base_rate
     //             FROM calc c
     //         )
-
+ 
     //         SELECT
     //             ROUND(
     //                 MAX(cwb.hp_deposit_amount)
@@ -677,10 +687,10 @@ class PurchaseOrderController extends Controller
     //             cwb.po_id,
     //             cwb.vehicle_registration
     //     ";
-
+ 
     //     $result1 = DB::selectOne($sql1, [$id]);
     //     $result2 = DB::selectOne($sql2, [$id]);
-
+ 
     //     if ($result1 !== null || $result2 !== null) {
     //         return response([
     //             'message' => 'Retrieve All Success',
@@ -690,7 +700,7 @@ class PurchaseOrderController extends Controller
     //             ]
     //         ], 200);
     //     }
-
+ 
     //     return response([
     //         'message' => 'Empty',
     //         'data'    => null
@@ -744,6 +754,26 @@ class PurchaseOrderController extends Controller
                     LEAST(
                         po.hp_term,
                         CASE
+                            -- Sold: stop the projection at the vehicle sold date
+                            WHEN (
+                                SELECT so2.next_step_status_sales
+                                FROM sales_orders so2
+                                WHERE so2.id_purchase_order = po.id
+                                ORDER BY so2.id DESC
+                                LIMIT 1
+                            ) = 'Sold'
+                            AND (
+                                SELECT MAX(vs.vehicle_sold_date)
+                                FROM vehicle_solds vs
+                                WHERE vs.id_purchase_order = po.id
+                            ) IS NOT NULL
+                            THEN TIMESTAMPDIFF(
+                                    MONTH,
+                                    po.hire_purchase_starting_date,
+                                    (SELECT MAX(vs.vehicle_sold_date)
+                                     FROM vehicle_solds vs
+                                     WHERE vs.id_purchase_order = po.id)
+                                 ) + 1
                             WHEN (
                                 SELECT so2.next_step_status_sales
                                 FROM sales_orders so2
@@ -850,7 +880,10 @@ class PurchaseOrderController extends Controller
                     + MAX(cwb.final_fees)
                     + MAX(cwb.final_payment)
                     + COALESCE(MAX(oct.total_other_cost), 0)
-                    + ((cwb.hp_term - cwb.effective_term) * MAX(cwb.monthly_payment))
+                    + (CASE
+                           WHEN cwb.last_next_step_status = 'Sold' THEN 0
+                           ELSE (cwb.hp_term - cwb.effective_term) * MAX(cwb.monthly_payment)
+                       END)
                 , 2) AS sum_total_cost
             FROM calc_with_base cwb
             LEFT JOIN other_costs_total oct ON oct.po_id = cwb.po_id
@@ -888,48 +921,18 @@ class PurchaseOrderController extends Controller
                     )                                                           AS last_status,
                     LEAST(
                         po.hp_term,
-                        CASE
-                            WHEN (
-                                SELECT so2.next_step_status_sales
-                                FROM sales_orders so2
-                                WHERE so2.id_purchase_order = po.id
-                                ORDER BY so2.id DESC
-                                LIMIT 1
-                            ) = 'Innactive'
-                                THEN TIMESTAMPDIFF(MONTH, po.hire_purchase_starting_date, CURDATE()) + 1
-                            WHEN (
-                                SELECT so2.next_step_status_sales
-                                FROM sales_orders so2
-                                WHERE so2.id_purchase_order = po.id
-                                ORDER BY so2.id DESC
-                                LIMIT 1
-                            ) = 'Sold'
-                                THEN TIMESTAMPDIFF(
-                                    MONTH,
-                                    po.hire_purchase_starting_date,
-                                    DATE_ADD(
-                                        (
-                                            SELECT so2.contract_start_date
-                                            FROM sales_orders so2
-                                            WHERE so2.id_purchase_order = po.id
-                                            ORDER BY so2.id DESC
-                                            LIMIT 1
-                                        ),
-                                        INTERVAL (
-                                            SELECT so2.margin_term
-                                            FROM sales_orders so2
-                                            WHERE so2.id_purchase_order = po.id
-                                            ORDER BY so2.id DESC
-                                            LIMIT 1
-                                        ) MONTH
-                                    )
-                                )
-                            ELSE
-                                TIMESTAMPDIFF(MONTH, po.hire_purchase_starting_date, CURDATE()) + 1
-                        END
+                        TIMESTAMPDIFF(MONTH, po.hire_purchase_starting_date, CURDATE()) + 1
                     )                                                           AS effective_term
                 FROM purchase_orders po
                 WHERE po.purchase_method != 'Cash'
+                  -- Sold agreements are skipped entirely (vehicle has left the fleet)
+                  AND (
+                        SELECT so2.next_step_status_sales
+                        FROM sales_orders so2
+                        WHERE so2.id_purchase_order = po.id
+                        ORDER BY so2.id DESC
+                        LIMIT 1
+                  ) <> 'Sold'
             ),
  
             other_costs_sum AS (
