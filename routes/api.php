@@ -43,6 +43,7 @@ Route::get('dashboardactivesales/{date1},{date2}', 'App\Http\Controllers\Api\Pur
 Route::get('countvehiclehired/{date1},{date2}', 'App\Http\Controllers\Api\PurchaseOrderController@countVehicleHired');
 Route::get('countvehiclesold/{date1},{date2}', 'App\Http\Controllers\Api\PurchaseOrderController@countVehicleSold');
 Route::get('laporan/{date1},{date2}', 'App\Http\Controllers\Api\PurchaseOrderController@laporan');
+Route::get('hpterm', 'App\Http\Controllers\Api\PurchaseOrderController@laporanHpTerm');
 
 //dashboard
 Route::get('sumtotalincome', 'App\Http\Controllers\Api\PurchaseOrderController@sumTotalIncome');

@@ -2585,4 +2585,63 @@ class PurchaseOrderController extends Controller
         ], 400);
     }
 
+    public function laporanHpTerm(){
+
+        $purchaseorder = DB::table('purchase_orders as po')
+            ->leftJoin('vehicle_solds as vs', 'po.id', '=', 'vs.id_purchase_order')
+            ->select([
+                'po.purchase_method as purchase_method',
+                'po.vehicle_registration as vehicle_registration',
+                'po.hp_finance_provider as hp_finance_provider',
+                'po.hire_purchase_starting_date as hire_purchase_starting_date',
+                'po.hp_interest_type as hp_interest_type',
+                'po.hp_interest_per_annum as hp_interest_per_annum',
+                'po.hp_deposit_amount as hp_deposit_amount',
+                'po.hp_term as hp_term',
+                DB::raw('CASE
+                        WHEN po.purchase_method != \'cash\'
+                        THEN DATE_ADD(po.hire_purchase_starting_date, INTERVAL po.hp_term MONTH)
+                        ELSE NULL
+                    END as end_date'),
+                'vs.vehicle_sold_date as defleet_date',
+            ])
+            ->get();
+
+        // Map column keys to the human-readable CSV headers.
+        $columns = [
+            'purchase_method'             => 'Purchase Method',
+            'vehicle_registration'        => 'Vehicle Registration No. (Include Spaces) (please type \'tba\' if it is not ready)',
+            'hp_finance_provider'         => 'HP Finance Provider (Only for Hire Purchase)',
+            'hire_purchase_starting_date' => 'Hire Purchase Starting Date / Vehicle Purchase Date / Rent Starting Date',
+            'hp_interest_type'            => 'HP Interest Type',
+            'hp_interest_per_annum'       => 'HP Interest per Annum (%) - (Only for Hire Purchase)',
+            'hp_deposit_amount'           => 'HP Deposit Amount (GBP) - (Only for Hire Purchase)',
+            'hp_term'                     => 'HP Term (Months) - (Only for Hire Purchase)',
+            'end_date'                    => 'End Date',
+            'defleet_date'                => 'Defleet Date',
+        ];
+
+        $fileName = 'laporan_hp_term_' . date('Ymd_His') . '.csv';
+
+        return response()->streamDownload(function () use ($purchaseorder, $columns) {
+            $handle = fopen('php://output', 'w');
+
+            // Header row.
+            fputcsv($handle, array_values($columns));
+
+            // Data rows.
+            foreach ($purchaseorder as $row) {
+                $line = [];
+                foreach (array_keys($columns) as $key) {
+                    $line[] = $row->$key;
+                }
+                fputcsv($handle, $line);
+            }
+
+            fclose($handle);
+        }, $fileName, [
+            'Content-Type' => 'text/csv',
+        ]);
+    }
+
 }
