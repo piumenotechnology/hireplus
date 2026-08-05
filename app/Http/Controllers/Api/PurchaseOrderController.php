@@ -728,6 +728,8 @@ class PurchaseOrderController extends Controller
                 'data'    => [
                     'sum_total_cost'     => $cashTotalCost, //projected_total_cost
                     'current_total_cost' => $cashTotalCost,
+                    'est_current_settlement' => 0,
+
                 ]
             ], 200);
         }
@@ -1016,9 +1018,121 @@ class PurchaseOrderController extends Controller
                 cwb.po_id,
                 cwb.vehicle_registration
         ";
+
+        $sql3 = "
+            WITH RECURSIVE
+            effective_terms AS (
+                SELECT
+                    po.id                                                       AS po_id,
+                    po.hp_term,
+                    po.hire_purchase_starting_date,
+                    (
+                        SELECT so2.next_step_status_sales
+                        FROM sales_orders so2
+                        WHERE so2.id_purchase_order = po.id
+                        ORDER BY so2.id DESC
+                        LIMIT 1
+                    )                                                           AS last_status,
+                    LEAST(
+                        po.hp_term,
+                        TIMESTAMPDIFF(MONTH, po.hire_purchase_starting_date, CURDATE()) + 1
+                    )                                                           AS effective_term
+                FROM purchase_orders po
+                WHERE po.purchase_method != 'Cash'
+                  -- Sold agreements are skipped entirely (vehicle has left the fleet)
+                  AND (
+                        SELECT so2.next_step_status_sales
+                        FROM sales_orders so2
+                        WHERE so2.id_purchase_order = po.id
+                        ORDER BY so2.id DESC
+                        LIMIT 1
+                  ) <> 'Sold'
+            ),
+ 
+            other_costs_sum AS (
+                SELECT
+                    id_purchase_order                                           AS po_id,
+                    SUM(amount_oc)                                              AS total_other_cost
+                FROM other_costs
+                GROUP BY id_purchase_order
+            ),
+ 
+            seq AS (
+                SELECT
+                    po.id                                                       AS po_id,
+                    po.vehicle_registration,
+                    1                                                           AS month_num,
+                    et.effective_term,
+                    et.last_status,
+                    po.hp_term,
+                    po.price_otr,
+                    po.hp_deposit_amount,
+                    po.hp_interest_per_annum,
+                    po.monthly_payment,
+                    po.final_payment,
+                    po.documentation_fees_pu,
+                    po.final_fees,
+                    po.hire_purchase_starting_date,
+                    (po.price_otr - po.hp_deposit_amount)                       AS financing
+                FROM purchase_orders po
+                INNER JOIN effective_terms et ON et.po_id = po.id
+                WHERE po.purchase_method != 'Cash'
+                AND et.effective_term > 0
+ 
+                UNION ALL
+ 
+                SELECT
+                    po_id, vehicle_registration, month_num + 1,
+                    effective_term, last_status, hp_term,
+                    price_otr, hp_deposit_amount, hp_interest_per_annum,
+                    monthly_payment, final_payment, documentation_fees_pu,
+                    final_fees, hire_purchase_starting_date, financing
+                FROM seq
+                WHERE month_num < effective_term
+            ),
+ 
+            calc AS (
+                SELECT
+                    s.*,
+                    DATE_ADD(s.hire_purchase_starting_date, INTERVAL (s.month_num - 1) MONTH) AS calc_date,
+                    (s.financing * s.hp_interest_per_annum / 100.0) / 12                       AS interest
+                FROM seq s
+            ),
+ 
+            calc_with_base AS (
+                SELECT
+                    c.*,
+                    (
+                        SELECT bi.percentage
+                        FROM base_interests bi
+                        WHERE bi.start_date <= c.calc_date
+                        ORDER BY bi.start_date DESC
+                        LIMIT 1
+                    )                                                           AS base_rate
+                FROM calc c
+            )
+ 
+            SELECT
+                ROUND(
+                    MAX(cwb.hp_deposit_amount)
+                    + MAX(cwb.monthly_payment) * MAX(cwb.hp_term - cwb.effective_term )
+                    + ROUND(SUM(cwb.interest), 2)
+                    + MAX(cwb.final_fees)
+                    + MAX(cwb.documentation_fees_pu)
+                    + ROUND(SUM((cwb.financing * IFNULL(cwb.base_rate, 0) / 100.0) / 12), 2)
+                    + COALESCE(MAX(oc.total_other_cost), 0)
+                , 2)                                                            AS current_settlement
+            FROM calc_with_base cwb
+            LEFT JOIN other_costs_sum oc ON oc.po_id = cwb.po_id
+            WHERE cwb.po_id = ?
+            GROUP BY
+                cwb.po_id,
+                cwb.vehicle_registration
+        ";
  
         $result1 = DB::selectOne($sql1, [$id]);
         $result2 = DB::selectOne($sql2, [$id]);
+        $result3 = DB::selectOne($sql3, [$id]);
  
         if ($result1 !== null || $result2 !== null) {
             return response([
@@ -1026,6 +1140,7 @@ class PurchaseOrderController extends Controller
                 'data'    => [
                     'sum_total_cost'   => $result1->sum_total_cost ?? null, //projected_total_cost
                     'current_total_cost' => $result2->sum_total_cost_live ?? null,
+                    'est_current_settlement' => $result3->current_settlement ?? null,
                 ]
             ], 200);
         }
@@ -1034,6 +1149,76 @@ class PurchaseOrderController extends Controller
             'message' => 'Empty',
             'data'    => null
         ], 400);
+    }
+
+    // Outstanding balance on the hire purchase as of today: the total cost of
+    // the vehicle minus everything already paid (deposit + the instalments that
+    // have fallen due, current month included).
+    public function currentSettlement($id)
+    {
+        $vehicle = DB::table('purchase_orders as po')
+            ->leftJoin('sales_orders as so', 'so.id_purchase_order', '=', 'po.id')
+            ->where('po.id', $id)
+            ->orderBy('so.id', 'desc')
+            ->select([
+                'po.vehicle_registration',
+                'po.hire_purchase_starting_date',
+                'po.hp_term',
+                'po.monthly_payment',
+                'po.hp_deposit_amount',
+                'so.total_cost',
+            ])
+            ->first();
+
+        if ($vehicle === null) {
+            return response([
+                'message' => 'Empty',
+                'data'    => null
+            ], 400);
+        }
+
+        $hpTerm         = (int) $vehicle->hp_term;
+        $monthlyPayment = (float) $vehicle->monthly_payment;
+        $depositAmount  = (float) $vehicle->hp_deposit_amount;
+        $totalCost      = (float) $vehicle->total_cost;
+
+        $ongoing           = 0;
+        $runningPayment    = 0.0;
+        $currentSettlement = 0.0;
+
+        // No HP schedule (Cash PO) or no cost recorded yet => nothing to settle.
+        if ($hpTerm && $monthlyPayment && $totalCost) {
+            // Whole calendar months between the HP start and today, counting the
+            // current month as an instalment that has already fallen due.
+            $start = Carbon::parse($vehicle->hire_purchase_starting_date);
+            $today = Carbon::now();
+
+            $ongoing = ($today->month - $start->month)
+                + 12 * ($today->year - $start->year)
+                + 1;
+
+            $runningPayment = ($monthlyPayment * $ongoing) + $depositAmount;
+
+            // Past the end of the term the agreement is fully paid off.
+            $currentSettlement = $ongoing > $hpTerm
+                ? 0.0
+                : max(0, round($totalCost - $runningPayment, 2));
+        }
+
+        return response([
+            'message' => 'Retrieve All Success',
+            'data'    => [
+                'vehicle_registration'        => $vehicle->vehicle_registration,
+                'hire_purchase_starting_date' => $vehicle->hire_purchase_starting_date,
+                'hp_term'                     => $hpTerm,
+                'monthly_payment'             => $monthlyPayment,
+                'hp_deposit_amount'           => $depositAmount,
+                'total_cost'                  => $totalCost,
+                'ongoing_term'                => $ongoing,
+                'running_payment'             => round($runningPayment, 2),
+                'current_settlement'          => $currentSettlement,
+            ]
+        ], 200);
     }
 
     public function listRentalIncome($id)

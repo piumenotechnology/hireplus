@@ -61,6 +61,7 @@ Route::get('listcostincard/{id}', 'App\Http\Controllers\Api\PurchaseOrderControl
 Route::get('listtotalincome/{id}', 'App\Http\Controllers\Api\PurchaseOrderController@listTotalIncome');
 
 Route::get('listtotalcost/{id}', 'App\Http\Controllers\Api\PurchaseOrderController@listTotalCost');
+Route::get('currentsettlement/{id}', 'App\Http\Controllers\Api\PurchaseOrderController@currentSettlement');
 Route::get('listrentalincome/{id}', 'App\Http\Controllers\Api\PurchaseOrderController@listRentalIncome');
 Route::get('listotherincome/{id}', 'App\Http\Controllers\Api\PurchaseOrderController@listOtherIncome');
 Route::get('listothercost/{id}', 'App\Http\Controllers\Api\PurchaseOrderController@listOtherCost');
