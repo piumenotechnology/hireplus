@@ -682,7 +682,8 @@ class PurchaseOrderController extends Controller
                                 ) AS current_settlement
                             FROM purchase_orders po
                             WHERE po.id = ?
-                            AND po.hp_term - TIMESTAMPDIFF(MONTH, po.hire_purchase_starting_date, CURDATE()) > 0";
+                            AND po.hp_term - TIMESTAMPDIFF(MONTH, po.hire_purchase_starting_date, CURDATE()) > 0
+                            AND po.status_next_step <> 'Sold'";
 
         $result1 = DB::selectOne($total_cost_projected, [$id]);
         $result2 = DB::selectOne($total_cost_live, [$id]);
